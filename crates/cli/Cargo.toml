@@ -1,0 +1,17 @@
+[package]
+name = "forgekit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "forgekit"
+path = "src/main.rs"
+
+[dependencies]
+forgekit-core = { path = "../core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+

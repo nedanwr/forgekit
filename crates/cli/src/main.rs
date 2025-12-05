@@ -1,0 +1,133 @@
+//! # ForgeKit CLI
+//!
+//! This is the command-line interface for ForgeKit. It's a thin wrapper around
+//! the core library (`forgekit_core`) that handles argument parsing, progress
+//! output formatting, and exit codes.
+//!
+//! ## Architecture
+//!
+//! The CLI follows a simple pattern:
+//!
+//! 1. **Parse arguments** - Use `clap` to parse CLI args into structured data
+//! 2. **Convert to JobSpec** - Transform CLI args into `JobSpec` (core library types)
+//! 3. **Execute** - Call `forgekit_core::job::executor::execute_job_with_progress()`
+//! 4. **Format output** - Print results or JSON progress events
+//! 5. **Exit** - Set exit code based on result
+//!
+//! ## Adding a New Command
+//!
+//! 1. Add a variant to the appropriate `*Command` enum (e.g., `PdfCommand`)
+//! 2. Add an `Args` struct for the command's arguments
+//! 3. Add a handler function (e.g., `handle_pdf_compress()`)
+//! 4. Wire it up in the match statement in `main()`
+//!
+//! See `commands/pdf.rs` for examples.
+
+mod commands;
+
+use clap::{Parser, Subcommand};
+use forgekit_core::utils::error::{ExitCode, ForgeKitError};
+use commands::pdf::{handle_pdf_command, PdfCommand};
+use commands::check::handle_check_deps;
+
+/// Main CLI structure.
+///
+/// Global flags apply to all commands. Subcommands are defined in the `Commands` enum.
+#[derive(Parser)]
+#[command(name = "forgekit")]
+#[command(about = "Local-first media and PDF toolkit", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+
+    /// Output progress as NDJSON (newline-delimited JSON).
+    ///
+    /// Each line is a JSON object representing a progress event. Useful for
+    /// scripting and automation. Example: `forgekit pdf merge --json | jq .progress`
+    #[arg(long, global = true)]
+    json: bool,
+
+    /// Show underlying commands without executing.
+    ///
+    /// Prints the exact command that would be run (e.g., `qpdf --linearize input.pdf output.pdf`).
+    /// Great for debugging and understanding what ForgeKit does under the hood.
+    #[arg(long, global = true)]
+    plan: bool,
+
+    /// Validate inputs and show plan, don't execute.
+    ///
+    /// Like `--plan`, but also validates that input files exist and paths are valid.
+    /// Useful for checking if a command would work before actually running it.
+    #[arg(long, global = true)]
+    dry_run: bool,
+
+    /// Log level (debug, info, warn, error).
+    ///
+    /// Controls verbosity of internal logging. `debug` shows tool invocations,
+    /// temp file paths, and progress parsing details.
+    #[arg(long, global = true, default_value = "info")]
+    log_level: String,
+
+    /// Overwrite existing output files without prompting.
+    ///
+    /// By default, ForgeKit will error if the output file already exists to prevent
+    /// accidental data loss. Use this flag to allow overwriting.
+    #[arg(short, long, global = true)]
+    force: bool,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// PDF operations
+    #[command(subcommand)]
+    Pdf(PdfCommand),
+    
+    /// Check if required dependencies are installed
+    CheckDeps,
+}
+
+fn main() {
+    let cli = Cli::parse();
+    let plan_only = cli.plan || cli.dry_run;
+    let json_output = cli.json;
+
+    let result = match &cli.command {
+        Some(Commands::Pdf(ref cmd)) => handle_pdf_command(cmd.clone(), plan_only, json_output),
+        Some(Commands::CheckDeps) => handle_check_deps(),
+        None => {
+            println!("ForgeKit - Local-first media and PDF toolkit");
+            println!("Use --help for usage information");
+            Ok(())
+        }
+    };
+
+    match result {
+        Ok(()) => {
+            std::process::exit(ExitCode::Success as i32);
+        }
+        Err(e) => {
+            if json_output {
+                // Emit error as JSON
+                let error_event = forgekit_core::job::progress::ProgressEvent::Error {
+                    version: 1,
+                    job_id: forgekit_core::job::progress::new_job_id(),
+                    error: forgekit_core::job::progress::ErrorInfo {
+                        code: format!("{:?}", e.exit_code()),
+                        message: e.to_string(),
+                        hint: match &e {
+                            ForgeKitError::ToolNotFound { hint, .. } => hint.clone(),
+                            _ => "Check logs for details".to_string(),
+                        },
+                    },
+                };
+                if let Ok(json) = serde_json::to_string(&error_event) {
+                    eprintln!("{}", json);
+                }
+            } else {
+                eprintln!("Error: {}", e);
+            }
+            std::process::exit(e.exit_code() as i32);
+        }
+    }
+}
+
