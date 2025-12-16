@@ -20,12 +20,14 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use crate::job::progress::{
+    new_job_id, ErrorInfo, JobResult, ProgressEvent, ProgressInfo, ProgressReporter,
+};
 use crate::job::JobSpec;
-use crate::tools::{Tool, ToolConfig};
 use crate::tools::qpdf::QpdfTool;
+use crate::tools::{Tool, ToolConfig};
 use crate::utils::error::{ForgeKitError, Result};
 use crate::utils::pages::PageSpec;
-use crate::job::progress::{ProgressEvent, ProgressReporter, ProgressInfo, JobResult, ErrorInfo, new_job_id};
 use std::time::Instant;
 
 /// Execute a job specification without progress reporting.
@@ -110,34 +112,34 @@ fn execute_pdf_merge_with_progress(
     if plan_only {
         // Generate plan showing the command that would be run
         let mut cmd_parts = vec!["qpdf".to_string()];
-        
+
         if linearize {
             cmd_parts.push("--linearize".to_string());
         }
-        
+
         cmd_parts.push("--empty".to_string());
         cmd_parts.push("--pages".to_string());
-        
+
         for input in inputs {
             cmd_parts.push(format!("{} 1-z", input.display()));
         }
-        
+
         cmd_parts.push("--".to_string());
         cmd_parts.push(output.display().to_string());
-        
+
         return Ok(cmd_parts.join(" "));
     }
 
     // Build qpdf command
     let mut cmd = Command::new(&tool_info.path);
-    
+
     if linearize {
         cmd.arg("--linearize");
     }
-    
+
     cmd.arg("--empty");
     cmd.arg("--pages");
-    
+
     for input in inputs {
         if !input.exists() {
             return Err(ForgeKitError::InvalidInput {
@@ -147,7 +149,7 @@ fn execute_pdf_merge_with_progress(
         }
         cmd.arg(format!("{} 1-z", input.display()));
     }
-    
+
     cmd.arg("--");
     cmd.arg(output);
 
@@ -163,7 +165,7 @@ fn execute_pdf_merge_with_progress(
             tool: "qpdf".to_string(),
             stderr: stderr.to_string(),
         };
-        
+
         // Emit error event
         reporter.report(&ProgressEvent::Error {
             version: 1,
@@ -174,7 +176,7 @@ fn execute_pdf_merge_with_progress(
                 hint: "Check that input files are valid PDFs".to_string(),
             },
         });
-        
+
         return Err(error);
     }
 
@@ -192,9 +194,7 @@ fn execute_pdf_merge_with_progress(
     });
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
-    let size_bytes = std::fs::metadata(output)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let size_bytes = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
 
     // Emit complete event
     reporter.report(&ProgressEvent::Complete {
@@ -207,7 +207,11 @@ fn execute_pdf_merge_with_progress(
         },
     });
 
-    Ok(format!("Successfully merged {} PDFs to {}", inputs.len(), output.display()))
+    Ok(format!(
+        "Successfully merged {} PDFs to {}",
+        inputs.len(),
+        output.display()
+    ))
 }
 
 fn execute_pdf_split(
@@ -245,7 +249,7 @@ fn execute_pdf_split(
     }
 
     // Ensure output directory exists
-    std::fs::create_dir_all(output_dir).map_err(|e| ForgeKitError::Io(e))?;
+    std::fs::create_dir_all(output_dir).map_err(ForgeKitError::Io)?;
 
     // Build qpdf command
     let qpdf_pages = PageSpec::to_qpdf_pages(pages, total_pages)?;
@@ -278,4 +282,3 @@ fn execute_pdf_split(
         output_file.display()
     ))
 }
-
