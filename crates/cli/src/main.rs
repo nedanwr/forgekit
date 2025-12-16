@@ -26,9 +26,9 @@
 mod commands;
 
 use clap::{Parser, Subcommand};
-use forgekit_core::utils::error::{ExitCode, ForgeKitError};
-use commands::pdf::{handle_pdf_command, PdfCommand};
 use commands::check::handle_check_deps;
+use commands::pdf::{handle_pdf_command, PdfCommand};
+use forgekit_core::utils::error::{ExitCode, ForgeKitError};
 
 /// Main CLI structure.
 ///
@@ -81,7 +81,7 @@ enum Commands {
     /// PDF operations
     #[command(subcommand)]
     Pdf(PdfCommand),
-    
+
     /// Check if required dependencies are installed
     CheckDeps,
 }
@@ -130,4 +130,3 @@ fn main() {
         }
     }
 }
-
