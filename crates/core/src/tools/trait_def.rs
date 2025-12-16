@@ -24,7 +24,7 @@
 //!
 //! See `qpdf.rs` for a complete example.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::utils::error::Result;
 
@@ -89,5 +89,5 @@ pub trait Tool: Send + Sync {
     /// # Errors
     ///
     /// Returns an error if the tool can't be executed or version can't be parsed.
-    fn version(&self, path: &PathBuf) -> Result<String>;
+    fn version(&self, path: &Path) -> Result<String>;
 }
