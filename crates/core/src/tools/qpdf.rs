@@ -14,11 +14,12 @@
 //!
 //! qpdf 10.0+ is required. Older versions may work but aren't tested.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::tools::{Tool, ToolConfig, ToolInfo};
 use crate::utils::error::{ForgeKitError, Result};
+use crate::utils::platform::ToolInstallHints;
 
 /// qpdf tool adapter.
 ///
@@ -46,13 +47,9 @@ impl Tool for QpdfTool {
 
         // Probe PATH
         let which_output = if cfg!(target_os = "windows") {
-            Command::new("where")
-                .arg("qpdf")
-                .output()
+            Command::new("where").arg("qpdf").output()
         } else {
-            Command::new("which")
-                .arg("qpdf")
-                .output()
+            Command::new("which").arg("qpdf").output()
         };
 
         let path = match which_output {
@@ -73,18 +70,17 @@ impl Tool for QpdfTool {
         };
 
         // Verify it works
-        let output = Command::new(&path)
-            .arg("--version")
-            .output()
-            .map_err(|_| ForgeKitError::ToolNotFound {
+        let output = Command::new(&path).arg("--version").output().map_err(|_| {
+            ForgeKitError::ToolNotFound {
                 tool: "qpdf".to_string(),
-                hint: "Install with: brew install qpdf (macOS) | apt install qpdf (Linux) | winget install qpdf (Windows)".to_string(),
-            })?;
+                hint: ToolInstallHints::for_tool("qpdf"),
+            }
+        })?;
 
         if !output.status.success() {
             return Err(ForgeKitError::ToolNotFound {
                 tool: "qpdf".to_string(),
-                hint: "Install with: brew install qpdf (macOS) | apt install qpdf (Linux) | winget install qpdf (Windows)".to_string(),
+                hint: ToolInstallHints::for_tool("qpdf"),
             });
         }
 
@@ -97,7 +93,7 @@ impl Tool for QpdfTool {
         })
     }
 
-    fn version(&self, path: &PathBuf) -> Result<String> {
+    fn version(&self, path: &Path) -> Result<String> {
         let output = Command::new(path)
             .arg("--version")
             .output()
@@ -149,4 +145,3 @@ mod tests {
         }
     }
 }
-
