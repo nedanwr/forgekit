@@ -11,8 +11,8 @@
 //! - **Serialization**: Could save jobs to disk, queue them, etc. (future)
 //! - **Clarity**: The executor code is cleaner when it just focuses on "how", not "what"
 
-use std::path::PathBuf;
 use crate::utils::pages::PageSpec;
+use std::path::PathBuf;
 
 /// A job specification describing what operation to perform.
 ///
@@ -66,7 +66,9 @@ impl JobSpec {
     /// Useful for logging, progress messages, and `--plan` output.
     pub fn description(&self) -> String {
         match self {
-            JobSpec::PdfMerge { inputs, linearize, .. } => {
+            JobSpec::PdfMerge {
+                inputs, linearize, ..
+            } => {
                 let linearize_str = if *linearize { " (linearized)" } else { "" };
                 format!("Merge {} PDFs{}", inputs.len(), linearize_str)
             }
@@ -76,4 +78,3 @@ impl JobSpec {
         }
     }
 }
-

@@ -69,11 +69,21 @@ pub struct SplitArgs {
     pub input: PathBuf,
 
     /// Output directory for split files
-    #[arg(short = 'o', long, required = true, help = "Output directory for split files")]
+    #[arg(
+        short = 'o',
+        long,
+        required = true,
+        help = "Output directory for split files"
+    )]
     pub output_dir: PathBuf,
 
     /// Page specification (e.g., "1-3,5,7-", "odd", "even", "!2")
-    #[arg(short, long, required = true, help = "Page specification: numbers (1, 42), ranges (1-5, 7-), keywords (odd, even, first, last), or exclusions (!2)")]
+    #[arg(
+        short,
+        long,
+        required = true,
+        help = "Page specification: numbers (1, 42), ranges (1-5, 7-), keywords (odd, even, first, last), or exclusions (!2)"
+    )]
     pub pages: String,
 }
 
@@ -171,4 +181,3 @@ fn handle_split(args: SplitArgs, plan_only: bool, json_output: bool) -> Result<(
         Ok(())
     }
 }
-

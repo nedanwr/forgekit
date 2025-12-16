@@ -11,9 +11,9 @@
 //! renames it to the final location. This prevents partial/corrupted files if
 //! the process is interrupted.
 
+use crate::utils::error::{ForgeKitError, Result};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
-use crate::utils::error::{ForgeKitError, Result};
 
 /// Create a temporary file with a unique name in the system temp directory.
 ///
@@ -37,7 +37,7 @@ pub fn create_temp_file(prefix: &str, suffix: &str) -> Result<PathBuf> {
     let unique_id = Uuid::new_v4();
     let filename = format!("{}-{}{}", prefix, unique_id, suffix);
     let temp_path = temp_dir.join(filename);
-    
+
     Ok(temp_path)
 }
 
@@ -66,11 +66,11 @@ pub fn create_temp_file_near(path: &Path, prefix: &str, suffix: &str) -> Result<
         path: path.to_path_buf(),
         reason: "Path has no parent directory".to_string(),
     })?;
-    
+
     let unique_id = Uuid::new_v4();
     let filename = format!("{}-{}{}", prefix, unique_id, suffix);
     let temp_path = parent.join(filename);
-    
+
     Ok(temp_path)
 }
 
@@ -107,13 +107,12 @@ where
     F: FnOnce(&Path) -> Result<()>,
 {
     let temp_path = create_temp_file_near(target, "forgekit", ".tmp")?;
-    
+
     // Write to temp file
     write_fn(&temp_path)?;
-    
+
     // Atomic rename
-    std::fs::rename(&temp_path, target).map_err(|e| ForgeKitError::Io(e))?;
-    
+    std::fs::rename(&temp_path, target).map_err(ForgeKitError::Io)?;
+
     Ok(())
 }
-

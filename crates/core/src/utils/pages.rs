@@ -88,9 +88,9 @@ impl PageSpec {
                 continue;
             }
 
-            let spec = if part.starts_with('!') {
+            let spec = if let Some(stripped) = part.strip_prefix('!') {
                 // Exclusion
-                let inner = Self::parse_single(&part[1..])?;
+                let inner = Self::parse_single(stripped)?;
                 PageSpec::Exclude(Box::new(inner))
             } else {
                 Self::parse_single(part)?
@@ -133,10 +133,7 @@ impl PageSpec {
             if start_str.is_empty() && end_str.is_empty() {
                 return Err(ForgeKitError::InvalidInput {
                     path: std::path::PathBuf::new(),
-                    reason: format!(
-                        "Invalid page spec '{}': range cannot be empty",
-                        s
-                    ),
+                    reason: format!("Invalid page spec '{}': range cannot be empty", s),
                 });
             }
 
@@ -225,7 +222,10 @@ impl PageSpec {
                     if end_val > total_pages {
                         return Err(ForgeKitError::InvalidInput {
                             path: std::path::PathBuf::new(),
-                            reason: format!("Page {} exceeds total pages ({})", end_val, total_pages),
+                            reason: format!(
+                                "Page {} exceeds total pages ({})",
+                                end_val, total_pages
+                            ),
                         });
                     }
                     parts.push(format!("{}-{}", start, end_val));
@@ -256,7 +256,8 @@ impl PageSpec {
                     // This is a simplified implementation
                     return Err(ForgeKitError::InvalidInput {
                         path: std::path::PathBuf::new(),
-                        reason: "Exclusions (!) are not yet fully supported in qpdf page spec".to_string(),
+                        reason: "Exclusions (!) are not yet fully supported in qpdf page spec"
+                            .to_string(),
                     });
                 }
             }
@@ -393,4 +394,3 @@ mod tests {
         assert_eq!(result, "2,4");
     }
 }
-

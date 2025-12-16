@@ -1,0 +1,18 @@
+#!/bin/bash
+# Post-installation script for ForgeKit Debian package
+# Automatically installs ocrmypdf Python package
+#
+# Note: Python3 is a required dependency, so it will be installed automatically
+# by apt if not already present. This script uses the existing Python installation.
+
+set -e
+
+# Install ocrmypdf if Python 3 and pip are available
+# Python3 is guaranteed to be installed (it's in Depends), but we check anyway
+if command -v python3 >/dev/null 2>&1 && command -v pip3 >/dev/null 2>&1; then
+    echo "Installing Python dependencies for ForgeKit..."
+    pip3 install --quiet --user ocrmypdf 2>/dev/null || pip3 install --quiet ocrmypdf 2>/dev/null || true
+fi
+
+exit 0
+
