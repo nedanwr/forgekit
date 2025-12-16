@@ -1,7 +1,212 @@
 # ForgeKit Beta-MVP Roadmap (CLI-First)
 
-**Last Updated**: December 2024  
-**Status**: Core foundation complete, PDF merge/split implemented, documentation complete
+**Last Updated**: December 2025  
+**Status**: Core foundation complete, PDF merge/split implemented, dependency management complete  
+**Current Version**: v0.0.3
+
+## Versioning Strategy
+
+**Version Format**: `MAJOR.MINOR.PATCH` (Semantic Versioning)
+
+- **MVP Release**: `0.1.0` - Beta-MVP feature complete
+- **GA Release**: `1.0.0` - Production-ready, stable API
+- **Pre-MVP**: `0.0.x` - Development releases leading to MVP
+
+### Release Roadmap
+
+#### v0.0.1 - Core Foundation
+
+**Status**: ✅ Completed
+
+**Deliverables**:
+
+- Rust workspace structure (core + CLI)
+- Tool trait system and qpdf adapter
+- Error handling with exit codes
+- Basic job execution framework
+- Unit tests for core functionality
+- `.gitignore` and basic project structure
+
+#### v0.0.2 - PDF Basic Operations ✅
+
+**Status**: Completed (Current)
+
+**Deliverables**:
+
+- PDF merge command (`pdf merge`) with linearize support
+- PDF split command (`pdf split`) with pages grammar
+- Pages grammar parser (1-3,5,7-,odd,even,!2) with 11 comprehensive tests
+- JSON progress output (NDJSON with version 1 schema)
+- `--plan` and `--dry-run` flags working
+- Comprehensive tests (20 tests: 13 unit, 2 integration, 5 doc)
+- Comprehensive documentation (README, CONTRIBUTING, inline docs)
+- `check-deps` command (basic implementation)
+- Error handling with actionable hints
+
+#### v0.0.3 - Dependency Management ✅
+
+**Status**: Completed
+
+**Deliverables**:
+
+- ✅ Enhanced `check-deps` command with platform-specific install instructions
+- ✅ Package dependency declarations:
+  - Debian/Ubuntu (`.deb` package metadata with Depends field)
+  - RPM (Fedora/RHEL package metadata with Requires field)
+  - Homebrew formula (Ruby with `depends_on` statements)
+  - winget manifest (YAML with Dependencies section)
+- ✅ Post-install hooks for automatic Python package installation (ocrmypdf)
+- ✅ Improved tool detection (PATH-first, config fallback)
+- ✅ Error messages with actionable install hints per platform
+- ✅ Documentation for dependency installation per platform
+- ✅ Tests for dependency checking (10 integration tests covering tool probing, platform detection, install hints, and error handling)
+
+#### v0.0.4 - PDF Advanced Operations 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- PDF compress command (`pdf compress`) with preset support
+- PDF linearize command (`pdf linearize`) as standalone subcommand
+- PDF reorder command (`pdf reorder`) with page ordering
+- PDF extract command (`pdf extract`) with page selection
+- pdfcpu tool adapter (probe, version, execute)
+- Preset system foundation (YAML loader and parser)
+- Tests for new PDF operations
+- Integration with existing pages grammar parser
+
+#### v0.0.5 - PDF OCR and Metadata 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- PDF OCR command (`pdf ocr`) with language selection
+- PDF metadata command (`pdf metadata`) with get/set operations
+- ocrmypdf tool adapter (Python wrapper handling)
+- exiftool adapter for metadata operations
+- OCR progress reporting (parse ocrmypdf output)
+- Metadata read/write operations
+- Tests for OCR and metadata operations
+- Error handling for OCR failures
+
+#### v0.0.6 - Image Operations 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- Image convert command (`image convert`) with format selection
+- Image resize command (`image resize`) with aspect ratio preservation
+- Image strip command (`image strip`) for EXIF removal
+- libvips tool adapter (primary, fast)
+- ImageMagick adapter (fallback for Windows compatibility)
+- Image presets (WebP, AVIF, JPEG quality presets)
+- Tests for image operations (dimensions, quality, format)
+- Golden tests for image conversion
+
+#### v0.0.7 - Audio Operations 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- Audio convert command (`audio convert`) with format/bitrate selection
+- Audio normalize command (`audio normalize`) with EBU R128 support
+- ffmpeg audio adapter (codec selection, bitrate control)
+- Audio presets (Opus 128k, AAC 192k, EBU R128 normalization)
+- Loudness normalization support (I=-16 LUFS target)
+- Tests for audio operations (duration, bitrate, format)
+- Progress reporting for audio processing
+
+#### v0.0.8 - Video Operations 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- Media transcode command (`media transcode`) with preset support
+- ffmpeg video adapter (H.264 only, software x264)
+- Video preset (H.264 1080p with CRF 23)
+- Progress parsing from ffmpeg stderr (time= and Duration=)
+- CRF-based quality control (0-51 range)
+- Scale filter with aspect ratio preservation
+- Tests for video operations (duration, codec, resolution)
+- Golden tests for video transcoding
+
+#### v0.0.9 - Package Creation and CI/CD 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- Debian package (`.deb`) with dependency declarations
+- RPM package (`.rpm`) with dependency declarations
+- Homebrew formula with dependencies (Ruby)
+- winget manifest with dependencies (YAML)
+- GitHub Actions CI/CD workflow:
+  - Build binaries for macOS, Windows, Linux
+  - Create platform-specific packages
+  - Run full test suite on all platforms
+  - Generate checksums (SHA256)
+  - Upload artifacts to GitHub Releases
+- Automated package building scripts
+- Release automation (version bumping, changelog)
+- Package repository setup (Homebrew tap, winget source)
+
+#### v0.1.0 - MVP Release (Beta-MVP) 📋
+
+**Status**: Pending
+
+**Deliverables**:
+
+- ✅ All CLI commands implemented and tested:
+  - PDF: merge, split, compress, linearize, reorder, extract, ocr, metadata
+  - Image: convert, resize, strip
+  - Audio: convert, normalize
+  - Media: transcode
+- ✅ All package formats available (deb, rpm, Homebrew, winget)
+- ✅ Comprehensive documentation (README, CONTRIBUTING, ROADMAP)
+- ✅ CI/CD passing on all platforms (macOS, Windows, Linux)
+- ✅ Golden tests for all operations
+- ✅ Preset system complete (YAML loader, all presets defined)
+- ✅ Production-ready error handling with actionable hints
+- ✅ Stable JSON progress API (version 1 schema)
+- ✅ Dependency management working (automatic installation)
+- ✅ Installation instructions for all platforms
+- ✅ Binary-only releases as fallback option
+
+**Post-MVP (v0.1.x)**:
+
+- Bug fixes and stability improvements
+- Performance optimizations
+- Additional presets (user-requested)
+- Documentation improvements
+- Minor feature additions (non-breaking)
+
+**v1.0.0 - GA Release** 📋
+**Status**: Post-MVP
+
+**Deliverables**:
+
+- Stable API (no breaking changes from 0.1.0)
+- Comprehensive test coverage (>90%)
+- Production-hardened error handling
+- Full documentation suite (user guide, API docs)
+- Community feedback incorporated
+- Performance optimizations completed
+- Security audit completed
+- Long-term support commitment
+- Migration guide from 0.x to 1.0
+
+**v1.0.0 - GA Release**:
+
+- Stable API (no breaking changes)
+- Comprehensive test coverage
+- Production-hardened
+- Full documentation
+- Community feedback incorporated
 
 ## Current Implementation Status
 
@@ -16,9 +221,11 @@
 - **Testing**: 20 tests passing (13 unit, 2 integration, 5 doc tests)
 - **Dependency Checking**: `check-deps` command implemented
 
+**Current Version**: v0.0.3 (completed)
+
 ### 🔄 In Progress
 
-- None currently
+- **v0.0.3**: Dependency Management (branch: `feat/dependency-management`)
 
 ### 📋 Pending Features
 
@@ -27,7 +234,6 @@
 - Media: transcode, audio convert/normalize
 - Preset system (YAML)
 - Package creation (deb, rpm, Homebrew, winget)
-- Dependency management and installation scripts
 - CI/CD setup with package building
 
 ## 1. Product Goals and Non-Goals
@@ -562,11 +768,13 @@ SEE ALSO:
 **Package dependency declarations**:
 
 **Debian/Ubuntu** (`.deb` package):
+
 ```deb
 Depends: qpdf (>= 11.0), pdfcpu, tesseract-ocr (>= 5.0), ffmpeg (>= 5.0), libvips-tools (>= 8.12), libimage-exiftool-perl (>= 12.0), python3, python3-pip
 ```
 
 **macOS** (Homebrew formula):
+
 ```ruby
 depends_on "qpdf" => ">= 11.0"
 depends_on "pdfcpu"
@@ -578,6 +786,7 @@ depends_on "python@3"
 ```
 
 **Windows** (winget manifest):
+
 ```yaml
 Dependencies:
   - PackageIdentifier: qpdf.qpdf
