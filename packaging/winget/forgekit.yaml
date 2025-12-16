@@ -1,0 +1,32 @@
+# winget manifest for ForgeKit
+# This file defines dependencies for Windows installation
+# When users install via `winget install forgekit`, these dependencies will be automatically installed
+
+Id: forgekit.forgekit
+Version: 0.0.3
+Name: ForgeKit
+Publisher: ForgeKit Contributors
+Description: Local-first media and PDF toolkit. Fast, privacy-focused CLI for PDF, image, audio, and video operations.
+License: MIT
+LicenseUrl: https://opensource.org/licenses/MIT
+Homepage: https://github.com/nedanwar/forgekit
+Tags:
+  - pdf
+  - media
+  - cli
+  - toolkit
+InstallerType: exe
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/nedanwar/forgekit/releases/download/v0.0.3/forgekit-0.0.3-x64.exe
+    InstallerSha256: PLACEHOLDER_SHA256
+ManifestType: version
+Dependencies:
+  - PackageIdentifier: qpdf.qpdf
+  - PackageIdentifier: pdfcpu.pdfcpu
+  - PackageIdentifier: tesseract-ocr
+  - PackageIdentifier: Gyan.FFmpeg
+  - PackageIdentifier: libvips.libvips
+  - PackageIdentifier: exiftool.exiftool
+  - PackageIdentifier: Python.Python.3
+
