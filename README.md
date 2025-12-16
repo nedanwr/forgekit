@@ -2,6 +2,8 @@
 
 Local-first media and PDF toolkit. Fast, lightweight, and privacy-focused.
 
+**Repository**: https://github.com/nedanwar/forgekit
+
 ## Quick Start
 
 ### Installation
@@ -44,45 +46,100 @@ forgekit pdf merge *.pdf --output out.pdf --json | jq -r '.result.output'
 
 ## Installation
 
-### Dependencies
+### Package Manager Installation (Recommended)
 
-ForgeKit requires external tools to be installed. Check if all dependencies are available:
+Install ForgeKit using your system's package manager. Dependencies are automatically installed alongside ForgeKit - no additional commands needed.
+
+**macOS (Homebrew):**
+
+```bash
+brew install forgekit
+```
+
+**Windows (winget):**
+
+```powershell
+winget install forgekit
+```
+
+**Debian/Ubuntu:**
+
+```bash
+sudo apt install forgekit
+```
+
+**Fedora/RHEL:**
+
+```bash
+sudo dnf install forgekit
+```
+
+**Arch Linux:**
+
+```bash
+# Available via AUR (when published)
+yay -S forgekit
+# or
+pacman -S forgekit
+```
+
+### Manual Installation
+
+If package manager installation isn't available, you can install ForgeKit manually and then install dependencies separately.
+
+**1. Install ForgeKit binary:**
+
+Download the latest release from [GitHub Releases](https://github.com/nedanwar/forgekit/releases) and add to your PATH.
+
+**2. Install dependencies:**
+
+Check which dependencies are missing:
 
 ```bash
 forgekit check-deps
 ```
 
-### macOS (Homebrew)
+Then install them based on your platform:
+
+**macOS (Homebrew):**
 
 ```bash
 brew install qpdf pdfcpu tesseract ffmpeg libvips exiftool
 pip3 install ocrmypdf
 ```
 
-### Windows (winget/scoop)
+**Windows (winget/scoop):**
 
 ```powershell
-winget install qpdf qpdf
-winget install pdfcpu pdfcpu
-winget install tesseract-ocr
-winget install ffmpeg
+winget install qpdf.qpdf pdfcpu.pdfcpu tesseract-ocr Gyan.FFmpeg
 scoop install libvips exiftool
 pip install ocrmypdf
 ```
 
-### Linux (apt/pacman)
+**Linux:**
 
 **Debian/Ubuntu:**
+
 ```bash
-sudo apt install qpdf pdfcpu tesseract-ocr ffmpeg libvips-tools libimage-exiftool-perl
+sudo apt install qpdf pdfcpu tesseract-ocr ffmpeg libvips-tools libimage-exiftool-perl python3-pip
 pip3 install ocrmypdf
 ```
 
-**Arch:**
+**Fedora/RHEL:**
+
 ```bash
-sudo pacman -S qpdf pdfcpu tesseract ffmpeg libvips perl-image-exiftool
+sudo dnf install qpdf pdfcpu tesseract ffmpeg libvips perl-Image-ExifTool python3-pip
 pip3 install ocrmypdf
 ```
+
+**Arch Linux:**
+
+```bash
+sudo pacman -S qpdf pdfcpu tesseract ffmpeg libvips perl-image-exiftool python-pip
+pip3 install ocrmypdf
+```
+
+**Note:** If you have a package manager available, we strongly recommend using package manager installation instead (see above). It automatically handles all dependencies including Python and ocrmypdf.
 
 ## Features
 
@@ -142,6 +199,7 @@ When using `--json`, ForgeKit outputs NDJSON (newline-delimited JSON) events:
 If you see "Tool 'qpdf' not found", install the required dependencies (see [Installation](#installation)).
 
 You can also override tool paths:
+
 ```bash
 forgekit pdf merge a.pdf b.pdf --output c.pdf --tools.qpdf=/custom/path/to/qpdf
 ```
@@ -156,9 +214,8 @@ Page numbers must be >= 1. Ranges must have start <= end. Use `--help` for examp
 
 ## Contributing
 
-Contributions welcome! Please open an issue or pull request.
+Contributions welcome! Please open an issue or pull request on [GitHub](https://github.com/nedanwar/forgekit).
 
 ## License
 
-MIT OR Apache-2.0
-
+MIT
