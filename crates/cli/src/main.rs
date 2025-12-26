@@ -34,51 +34,27 @@ use forgekit_core::utils::error::{ExitCode, ForgeKitError};
 ///
 /// Global flags apply to all commands. Subcommands are defined in the `Commands` enum.
 #[derive(Parser)]
-#[command(name = "forgekit")]
-#[command(about = "Local-first media and PDF toolkit", long_about = None)]
+#[command(
+    name = "forgekit",
+    about = "Local-first media and PDF toolkit",
+    long_about = "ForgeKit - Fast, lightweight, and privacy-focused media toolkit.\n\nQuick Start:\n  forgekit pdf merge doc1.pdf doc2.pdf --output merged.pdf\n  forgekit pdf split book.pdf --output-dir pages/ --pages 1-5\n  forgekit pdf compress large.pdf --output small.pdf --level high"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
 
-    /// Output progress as NDJSON (newline-delimited JSON).
-    ///
-    /// Each line is a JSON object representing a progress event. Useful for
-    /// scripting and automation. Example: `forgekit pdf merge --json | jq .progress`
-    #[arg(long, global = true)]
-    json: bool,
-
-    /// Show underlying commands without executing.
-    ///
-    /// Prints the exact command that would be run (e.g., `qpdf --linearize input.pdf output.pdf`).
-    /// Great for debugging and understanding what ForgeKit does under the hood.
+    /// Show what commands would be executed without running them
     #[arg(long, global = true)]
     plan: bool,
 
-    /// Validate inputs and show plan, don't execute.
-    ///
-    /// Like `--plan`, but also validates that input files exist and paths are valid.
-    /// Useful for checking if a command would work before actually running it.
+    /// Output progress as JSON (NDJSON format, one event per line)
     #[arg(long, global = true)]
-    dry_run: bool,
-
-    /// Log level (debug, info, warn, error).
-    ///
-    /// Controls verbosity of internal logging. `debug` shows tool invocations,
-    /// temp file paths, and progress parsing details.
-    #[arg(long, global = true, default_value = "info")]
-    log_level: String,
-
-    /// Overwrite existing output files without prompting.
-    ///
-    /// By default, ForgeKit will error if the output file already exists to prevent
-    /// accidental data loss. Use this flag to allow overwriting.
-    #[arg(short, long, global = true)]
-    force: bool,
+    json: bool,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// PDF operations
+    /// PDF operations (merge, split, compress, extract, etc.)
     #[command(subcommand)]
     Pdf(PdfCommand),
 
@@ -88,7 +64,7 @@ enum Commands {
 
 fn main() {
     let cli = Cli::parse();
-    let plan_only = cli.plan || cli.dry_run;
+    let plan_only = cli.plan;
     let json_output = cli.json;
 
     let result = match &cli.command {
