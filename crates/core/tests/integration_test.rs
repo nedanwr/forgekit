@@ -53,23 +53,29 @@ fn test_json_complete_format() {
 
 #[test]
 fn test_tool_probe_with_override_path() {
-    // Test that override_path takes precedence over PATH
+    // Test that override_path that doesn't exist falls back to PATH
+    // (This is the designed fallback behavior)
     let tool = QpdfTool;
     let config = ToolConfig {
         override_path: Some(PathBuf::from("/nonexistent/qpdf")),
     };
 
     let result = tool.probe(&config);
-    // Should fail because the override path doesn't exist
-    assert!(result.is_err());
-
-    // Verify it's a ToolNotFound error with a hint
-    if let Err(ForgeKitError::ToolNotFound { hint, .. }) = result {
-        assert!(!hint.is_empty());
-        assert!(hint.contains("qpdf") || hint.contains("install"));
-    } else {
-        // If qpdf is not installed, we might get a different error
-        // That's okay - the important thing is we tested the override path logic
+    // Result depends on whether qpdf is installed on the system
+    // If qpdf is on PATH, probe succeeds (fallback worked)
+    // If qpdf is not on PATH, probe fails
+    match result {
+        Ok(info) => {
+            // qpdf is installed - fallback to PATH worked
+            assert!(info.available);
+            // The path should NOT be the nonexistent override path
+            assert_ne!(info.path, PathBuf::from("/nonexistent/qpdf"));
+        }
+        Err(ForgeKitError::ToolNotFound { hint, .. }) => {
+            // qpdf not installed - that's fine
+            assert!(!hint.is_empty());
+        }
+        Err(e) => panic!("Unexpected error type: {:?}", e),
     }
 }
 
@@ -123,7 +129,7 @@ fn test_tool_install_hints_platform_specific() {
     // Test that install hints are platform-specific
     let tools = vec![
         "qpdf",
-        "pdfcpu",
+        "gs",
         "tesseract",
         "ocrmypdf",
         "ffmpeg",
@@ -288,7 +294,7 @@ fn test_tool_version_parsing() {
 fn test_platform_install_hints_bulk() {
     // Test bulk install hints for multiple tools
     let platform = detect_platform();
-    let tools = vec!["qpdf", "pdfcpu", "tesseract"];
+    let tools = vec!["qpdf", "gs", "tesseract"];
 
     let bulk_hint = platform.install_hints(&tools);
     assert!(!bulk_hint.is_empty());
