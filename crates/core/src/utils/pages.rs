@@ -25,7 +25,7 @@ use std::fmt;
 /// A page specification for selecting pages from a document.
 ///
 /// Pages are 1-indexed (first page is 1, not 0). This matches how users
-/// think about pages and how most tools (qpdf, pdfcpu) work.
+/// think about pages and how most PDF tools work.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PageSpec {
     /// Single page number (1-indexed, e.g., `Page(5)` means page 5).
