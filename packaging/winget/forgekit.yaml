@@ -23,7 +23,7 @@ Installers:
 ManifestType: version
 Dependencies:
   - PackageIdentifier: qpdf.qpdf
-  - PackageIdentifier: pdfcpu.pdfcpu
+  - PackageIdentifier: ArtifexSoftware.GhostScript
   - PackageIdentifier: tesseract-ocr
   - PackageIdentifier: Gyan.FFmpeg
   - PackageIdentifier: libvips.libvips
