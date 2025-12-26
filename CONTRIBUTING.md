@@ -59,7 +59,7 @@ ForgeKit is organized as a Rust workspace with two main crates:
 
 - A `JobSpec` describes what you want to do (merge PDFs, resize images, etc.)
 - It's pure data - no execution logic
-- Examples: `PdfMerge`, `PdfSplit`, `ImageConvert` (coming soon)
+- Examples: `PdfMerge`, `PdfSplit`, `PdfCompress`
 
 **Tools** (`crates/core/src/tools/`)
 
@@ -94,13 +94,13 @@ ForgeKit is organized as a Rust workspace with two main crates:
    }
    ```
 
-2. **Create a tool adapter** (`crates/core/src/tools/pdfcpu.rs`):
+2. **Create a tool adapter** (`crates/core/src/tools/gs.rs`):
 
    ```rust
-   pub struct PdfcpuTool;
+   pub struct GsTool;
 
-   impl Tool for PdfcpuTool {
-       fn name(&self) -> &'static str { "pdfcpu" }
+   impl Tool for GsTool {
+       fn name(&self) -> &'static str { "gs" }
        fn probe(&self, config: &ToolConfig) -> Result<ToolInfo> { /* ... */ }
        fn version(&self, path: &PathBuf) -> Result<String> { /* ... */ }
    }
@@ -178,7 +178,7 @@ Keep commits focused and descriptive:
 Add PDF compression support
 
 - Add PdfCompress JobSpec variant
-- Implement pdfcpu tool adapter
+- Implement Ghostscript tool adapter
 - Add pdf compress CLI subcommand
 - Add tests for compression levels
 ```
