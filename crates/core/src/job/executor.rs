@@ -24,6 +24,8 @@ use crate::job::progress::{
     new_job_id, ErrorInfo, JobResult, ProgressEvent, ProgressInfo, ProgressReporter,
 };
 use crate::job::JobSpec;
+use crate::presets::get_compression_strategy;
+use crate::tools::gs::GsTool;
 use crate::tools::qpdf::QpdfTool;
 use crate::tools::{Tool, ToolConfig};
 use crate::utils::error::{ForgeKitError, Result};
@@ -72,6 +74,31 @@ pub fn execute_job_with_progress(
             output_dir,
             pages,
         } => execute_pdf_split(input, output_dir, pages, plan_only),
+        JobSpec::PdfCompress {
+            input,
+            output,
+            level,
+        } => execute_pdf_compress(input, output, &level, plan_only),
+        JobSpec::PdfLinearize { input, output } => execute_pdf_linearize(input, output, plan_only),
+        JobSpec::PdfReorder {
+            input,
+            output,
+            page_order,
+        } => execute_pdf_reorder(input, output, page_order, plan_only),
+        JobSpec::PdfExtract {
+            input,
+            output,
+            output_dir,
+            pages,
+            format,
+        } => execute_pdf_extract(
+            input,
+            output.as_ref(),
+            output_dir.as_ref(),
+            pages,
+            &format,
+            plan_only,
+        ),
     }
 }
 
@@ -281,4 +308,342 @@ fn execute_pdf_split(
         qpdf_pages,
         output_file.display()
     ))
+}
+
+fn execute_pdf_compress(
+    input: &PathBuf,
+    output: &PathBuf,
+    level: &str,
+    plan_only: bool,
+) -> Result<String> {
+    let strategy = get_compression_strategy(level);
+
+    if plan_only {
+        // Generate plan showing the command that would be run
+        let mut cmd_parts = vec![strategy.tool.clone()];
+        match strategy.tool.as_str() {
+            "gs" => {
+                // Ghostscript: gs [flags] -sOutputFile=output.pdf input.pdf
+                cmd_parts.extend(strategy.flags.iter().cloned());
+                cmd_parts.push(format!("-sOutputFile={}", output.display()));
+                cmd_parts.push(input.display().to_string());
+            }
+            "qpdf" => {
+                cmd_parts.extend(strategy.flags.iter().cloned());
+                cmd_parts.push(input.display().to_string());
+                cmd_parts.push(output.display().to_string());
+            }
+            _ => {
+                return Err(ForgeKitError::Other(anyhow::anyhow!(
+                    "Unknown compression tool: {}",
+                    strategy.tool
+                )));
+            }
+        }
+        return Ok(cmd_parts.join(" "));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.clone(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    match strategy.tool.as_str() {
+        "gs" => {
+            // Probe for Ghostscript
+            let tool = GsTool;
+            let config = ToolConfig::default();
+            let tool_info = tool.probe(&config)?;
+
+            // Build Ghostscript command
+            // gs [flags] -sOutputFile=output.pdf input.pdf
+            // Note: input comes LAST for Ghostscript
+            let mut cmd = Command::new(&tool_info.path);
+            // Input comes LAST for Ghostscript
+            // Output file must come BEFORE any -c (PostScript) flags
+            cmd.arg(format!("-sOutputFile={}", output.display()));
+            cmd.args(&strategy.flags);
+            // Must use -f to separate input file from preceding -c arguments
+            cmd.arg("-f");
+            cmd.arg(input);
+
+            // Execute
+            let output_result = cmd.output().map_err(|e| ForgeKitError::ProcessingFailed {
+                tool: "gs".to_string(),
+                stderr: format!("Failed to execute: {}", e),
+            })?;
+
+            if !output_result.status.success() {
+                let stderr = String::from_utf8_lossy(&output_result.stderr);
+                return Err(ForgeKitError::ProcessingFailed {
+                    tool: "gs".to_string(),
+                    stderr: stderr.to_string(),
+                });
+            }
+        }
+        "qpdf" => {
+            // Probe for qpdf (kept for future use, e.g., page operations)
+            let tool = QpdfTool;
+            let config = ToolConfig::default();
+            let tool_info = tool.probe(&config)?;
+
+            // Build qpdf command
+            let mut cmd = Command::new(&tool_info.path);
+            cmd.args(&strategy.flags);
+            cmd.arg(input);
+            cmd.arg(output);
+
+            // Execute
+            let output_result = cmd.output().map_err(|e| ForgeKitError::ProcessingFailed {
+                tool: "qpdf".to_string(),
+                stderr: format!("Failed to execute: {}", e),
+            })?;
+
+            if !output_result.status.success() {
+                let stderr = String::from_utf8_lossy(&output_result.stderr);
+                return Err(ForgeKitError::ProcessingFailed {
+                    tool: "qpdf".to_string(),
+                    stderr: stderr.to_string(),
+                });
+            }
+        }
+        _ => {
+            return Err(ForgeKitError::Other(anyhow::anyhow!(
+                "Unknown compression tool: {}",
+                strategy.tool
+            )));
+        }
+    }
+
+    Ok(format!(
+        "Successfully compressed PDF to {}",
+        output.display()
+    ))
+}
+
+fn execute_pdf_linearize(input: &PathBuf, output: &PathBuf, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(format!(
+            "qpdf --linearize {} {}",
+            input.display(),
+            output.display()
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.clone(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    // Probe for qpdf
+    let tool = QpdfTool;
+    let config = ToolConfig::default();
+    let tool_info = tool.probe(&config)?;
+
+    // Build qpdf command
+    let mut cmd = Command::new(&tool_info.path);
+    cmd.arg("--linearize");
+    cmd.arg(input);
+    cmd.arg(output);
+
+    // Execute
+    let output_result = cmd.output().map_err(|e| ForgeKitError::ProcessingFailed {
+        tool: "qpdf".to_string(),
+        stderr: format!("Failed to execute: {}", e),
+    })?;
+
+    if !output_result.status.success() {
+        let stderr = String::from_utf8_lossy(&output_result.stderr);
+        return Err(ForgeKitError::ProcessingFailed {
+            tool: "qpdf".to_string(),
+            stderr: stderr.to_string(),
+        });
+    }
+
+    Ok(format!(
+        "Successfully linearized PDF to {}",
+        output.display()
+    ))
+}
+
+fn execute_pdf_reorder(
+    input: &PathBuf,
+    output: &PathBuf,
+    page_order: &[u32],
+    plan_only: bool,
+) -> Result<String> {
+    if page_order.is_empty() {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "Page order cannot be empty".to_string(),
+        });
+    }
+
+    // Convert page_order (1-indexed) to qpdf pages format
+    let pages_str = page_order
+        .iter()
+        .map(|p| p.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    if plan_only {
+        return Ok(format!(
+            "qpdf {} --pages {} -- {}",
+            input.display(),
+            pages_str,
+            output.display()
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.clone(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    // Probe for qpdf
+    let tool = QpdfTool;
+    let config = ToolConfig::default();
+    let tool_info = tool.probe(&config)?;
+
+    // Build qpdf command
+    let mut cmd = Command::new(&tool_info.path);
+    cmd.arg(input);
+    cmd.arg("--pages");
+    cmd.arg(&pages_str);
+    cmd.arg("--");
+    cmd.arg(output);
+
+    // Execute
+    let output_result = cmd.output().map_err(|e| ForgeKitError::ProcessingFailed {
+        tool: "qpdf".to_string(),
+        stderr: format!("Failed to execute: {}", e),
+    })?;
+
+    if !output_result.status.success() {
+        let stderr = String::from_utf8_lossy(&output_result.stderr);
+        return Err(ForgeKitError::ProcessingFailed {
+            tool: "qpdf".to_string(),
+            stderr: stderr.to_string(),
+        });
+    }
+
+    Ok(format!(
+        "Successfully reordered PDF pages to {}",
+        output.display()
+    ))
+}
+
+fn execute_pdf_extract(
+    input: &PathBuf,
+    output: Option<&PathBuf>,
+    output_dir: Option<&PathBuf>,
+    pages: &[PageSpec],
+    format: &str,
+    plan_only: bool,
+) -> Result<String> {
+    if pages.is_empty() {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "At least one page specification required".to_string(),
+        });
+    }
+
+    match format {
+        "pdf" => {
+            let output_path = output.ok_or_else(|| ForgeKitError::InvalidInput {
+                path: PathBuf::new(),
+                reason: "Output file path required when format is 'pdf'".to_string(),
+            })?;
+
+            // For now, we'll assume total_pages = 100 (in real implementation, we'd query this)
+            let total_pages = 100; // TODO: Get actual page count from PDF
+
+            if plan_only {
+                let qpdf_pages = PageSpec::to_qpdf_pages(pages, total_pages)?;
+                return Ok(format!(
+                    "qpdf {} --pages {} -- {}",
+                    input.display(),
+                    qpdf_pages,
+                    output_path.display()
+                ));
+            }
+
+            if !input.exists() {
+                return Err(ForgeKitError::InvalidInput {
+                    path: input.clone(),
+                    reason: "Input file does not exist".to_string(),
+                });
+            }
+
+            // Probe for qpdf
+            let tool = QpdfTool;
+            let config = ToolConfig::default();
+            let tool_info = tool.probe(&config)?;
+
+            // Build qpdf command
+            let qpdf_pages = PageSpec::to_qpdf_pages(pages, total_pages)?;
+
+            let mut cmd = Command::new(&tool_info.path);
+            cmd.arg(input);
+            cmd.arg("--pages");
+            cmd.arg(&qpdf_pages);
+            cmd.arg("--");
+            cmd.arg(output_path);
+
+            // Execute
+            let output_result = cmd.output().map_err(|e| ForgeKitError::ProcessingFailed {
+                tool: "qpdf".to_string(),
+                stderr: format!("Failed to execute: {}", e),
+            })?;
+
+            if !output_result.status.success() {
+                let stderr = String::from_utf8_lossy(&output_result.stderr);
+                return Err(ForgeKitError::ProcessingFailed {
+                    tool: "qpdf".to_string(),
+                    stderr: stderr.to_string(),
+                });
+            }
+
+            Ok(format!(
+                "Successfully extracted PDF pages to {}",
+                output_path.display()
+            ))
+        }
+        "images" => {
+            let output_dir_path = output_dir.ok_or_else(|| ForgeKitError::InvalidInput {
+                path: PathBuf::new(),
+                reason: "Output directory path required when format is 'images'".to_string(),
+            })?;
+
+            if plan_only {
+                // For images, we'd use pdf2image or similar tool
+                // For now, show a placeholder plan
+                return Ok(format!(
+                    "pdf2image {} --output-dir {} --pages {}",
+                    input.display(),
+                    output_dir_path.display(),
+                    "1-5" // Simplified for plan
+                ));
+            }
+
+            // TODO: Implement image extraction using pdf2image or similar tool
+            // For now, return an error indicating this feature is not yet implemented
+            Err(ForgeKitError::Other(anyhow::anyhow!(
+                "Image extraction is not yet implemented. Use format 'pdf' to extract pages to a PDF file."
+            )))
+        }
+        _ => Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: format!(
+                "Unknown format '{}'. Supported formats: pdf, images",
+                format
+            ),
+        }),
+    }
 }
