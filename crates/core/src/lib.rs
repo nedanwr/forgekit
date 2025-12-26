@@ -36,7 +36,7 @@
 //! ```rust,no_run
 //! use forgekit_core::tools::{Tool, ToolConfig, ToolInfo};
 //! use forgekit_core::utils::error::Result;
-//! use std::path::PathBuf;
+//! use std::path::{Path, PathBuf};
 //!
 //! pub struct MyTool;
 //!
@@ -49,7 +49,7 @@
 //!         # todo!()
 //!     }
 //!
-//!     fn version(&self, path: &PathBuf) -> Result<String> {
+//!     fn version(&self, path: &Path) -> Result<String> {
 //!         // Run `mytool --version` and parse the output
 //!         # todo!()
 //!     }
@@ -59,6 +59,7 @@
 //! Then add a `JobSpec` variant and wire it up in the executor. That's it!
 
 pub mod job;
+pub mod presets;
 pub mod tools;
 pub mod utils;
 
