@@ -10,25 +10,25 @@ all required external tools are automatically installed as dependencies.
 
 - **File**: `debian/control`
 - **Usage**: Included in `.deb` package metadata
-- **Dependencies**: qpdf, pdfcpu, tesseract-ocr, ffmpeg, libvips-tools, libimage-exiftool-perl, python3-pip
+- **Dependencies**: qpdf, ghostscript, tesseract-ocr, ffmpeg, libvips-tools, libimage-exiftool-perl, python3-pip
 
 ### Fedora/RHEL/CentOS (`.rpm`)
 
 - **File**: `rpm/forgekit.spec`
 - **Usage**: Used to build `.rpm` packages with `rpmbuild`
-- **Dependencies**: qpdf, pdfcpu, tesseract, ffmpeg, libvips, perl-Image-ExifTool, python3-pip
+- **Dependencies**: qpdf, ghostscript, tesseract, ffmpeg, libvips, perl-Image-ExifTool, python3-pip
 
 ### macOS (Homebrew)
 
 - **File**: `homebrew/forgekit.rb`
 - **Usage**: Homebrew formula file
-- **Dependencies**: qpdf, pdfcpu, tesseract, ffmpeg, libvips, exiftool, python@3
+- **Dependencies**: qpdf, ghostscript, tesseract, ffmpeg, libvips, exiftool, python@3
 
 ### Windows (winget)
 
 - **File**: `winget/forgekit.yaml`
 - **Usage**: winget manifest for Windows Package Manager
-- **Dependencies**: qpdf.qpdf, pdfcpu.pdfcpu, tesseract-ocr, Gyan.FFmpeg, libvips.libvips, exiftool.exiftool, Python.Python.3
+- **Dependencies**: qpdf.qpdf, ArtifexSoftware.GhostScript, tesseract-ocr, Gyan.FFmpeg, libvips.libvips, exiftool.exiftool, Python.Python.3
 
 ## Building Packages
 
