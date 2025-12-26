@@ -1,3 +1,4 @@
+pub mod gs;
 pub mod qpdf;
 pub mod trait_def;
 
