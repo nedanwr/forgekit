@@ -104,14 +104,14 @@ Then install them based on your platform:
 **macOS (Homebrew):**
 
 ```bash
-brew install qpdf pdfcpu tesseract ffmpeg libvips exiftool
+brew install qpdf ghostscript tesseract ffmpeg libvips exiftool
 pip3 install ocrmypdf
 ```
 
 **Windows (winget/scoop):**
 
 ```powershell
-winget install qpdf.qpdf pdfcpu.pdfcpu tesseract-ocr Gyan.FFmpeg
+winget install qpdf.qpdf ArtifexSoftware.GhostScript tesseract-ocr Gyan.FFmpeg
 scoop install libvips exiftool
 pip install ocrmypdf
 ```
@@ -121,21 +121,21 @@ pip install ocrmypdf
 **Debian/Ubuntu:**
 
 ```bash
-sudo apt install qpdf pdfcpu tesseract-ocr ffmpeg libvips-tools libimage-exiftool-perl python3-pip
+sudo apt install qpdf ghostscript tesseract-ocr ffmpeg libvips-tools libimage-exiftool-perl python3-pip
 pip3 install ocrmypdf
 ```
 
 **Fedora/RHEL:**
 
 ```bash
-sudo dnf install qpdf pdfcpu tesseract ffmpeg libvips perl-Image-ExifTool python3-pip
+sudo dnf install qpdf ghostscript tesseract ffmpeg libvips perl-Image-ExifTool python3-pip
 pip3 install ocrmypdf
 ```
 
 **Arch Linux:**
 
 ```bash
-sudo pacman -S qpdf pdfcpu tesseract ffmpeg libvips perl-image-exiftool python-pip
+sudo pacman -S qpdf ghostscript tesseract ffmpeg libvips perl-image-exiftool python-pip
 pip3 install ocrmypdf
 ```
 
@@ -148,7 +148,7 @@ pip3 install ocrmypdf
 - **Merge**: Combine multiple PDFs into one
 - **Split**: Extract pages by ranges or keywords
 - **Linearize**: Optimize for fast web view
-- **Compress**: Reduce file size with presets (coming soon)
+- **Compress**: Reduce file size with Ghostscript presets
 - **OCR**: Add searchable text layer (coming soon)
 - **Metadata**: View/edit PDF metadata (coming soon)
 
