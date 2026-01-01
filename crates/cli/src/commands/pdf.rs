@@ -25,12 +25,13 @@ pub enum PdfCommand {
     /// Examples:
     ///   forgekit pdf compress input.pdf --output compressed.pdf
     ///   forgekit pdf compress input.pdf --output compressed.pdf --level light
-    ///   forgekit pdf compress input.pdf --output compressed.pdf --level high
+    ///   forgekit pdf compress input.pdf --output compressed.pdf --level xhigh
     ///
     /// Compression levels (using Ghostscript):
     ///   - light: High quality (~4.2MB)
     ///   - standard: Medium quality (~3.4MB, default)
     ///   - high: Low quality (~2.7MB)
+    ///   - xhigh: Extreme compression (<1MB, significant quality loss)
     Compress(CompressArgs),
     /// Linearize a PDF for fast web viewing
     ///
@@ -101,7 +102,7 @@ pub struct CompressArgs {
     #[arg(short, long, required = true, help = "Output PDF file path")]
     pub output: PathBuf,
 
-    /// Compression level: light (preserves quality), standard (default), or high (smallest size)
+    /// Compression level: light, standard (default), high, or xhigh (extreme)
     #[arg(short, long, default_value = "standard")]
     pub level: String,
 }
