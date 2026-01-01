@@ -48,10 +48,11 @@ pub enum PdfCommand {
     /// Examples:
     ///   forgekit pdf extract book.pdf --output pages.pdf --pages 1-5
     ///   forgekit pdf extract book.pdf --output odd.pdf --pages odd
-    ///   forgekit pdf extract book.pdf --output-dir images/ --pages 1-5 --format images
+    ///   forgekit pdf extract book.pdf --output-dir images/ --pages 1-5 --format png
+    ///   forgekit pdf extract book.pdf --output-dir images/ --pages 1-5 --format jpeg
     ///
     /// Page spec: numbers (1), ranges (1-5, 7-), keywords (odd, even), exclusions (!2)
-    /// Formats: pdf (default), images (separate PNG files per page)
+    /// Formats: pdf (default), png, jpeg/jpg (image files per page)
     Extract(ExtractArgs),
 }
 
@@ -150,11 +151,11 @@ pub struct ExtractArgs {
     )]
     pub output: Option<PathBuf>,
 
-    /// Output directory path (required when format is 'images')
+    /// Output directory path (required when format is 'png' or 'jpeg')
     #[arg(
         short = 'd',
         long,
-        help = "Output directory path (required when format is 'images')"
+        help = "Output directory path (required when format is 'png' or 'jpeg')"
     )]
     pub output_dir: Option<PathBuf>,
 
@@ -162,7 +163,7 @@ pub struct ExtractArgs {
     #[arg(short, long, required = true)]
     pub pages: String,
 
-    /// Output format: pdf (default) or images
+    /// Output format: pdf (default), png, or jpeg/jpg
     #[arg(long, default_value = "pdf")]
     pub format: String,
 }
@@ -413,11 +414,11 @@ fn handle_extract(args: ExtractArgs, plan_only: bool, json_output: bool) -> Resu
                 });
             }
         }
-        "images" => {
+        "png" | "jpeg" | "jpg" => {
             if args.output_dir.is_none() {
                 return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
                     path: PathBuf::new(),
-                    reason: "Output directory path required when format is 'images'. Use --output-dir <dir>".to_string(),
+                    reason: format!("Output directory path required when format is '{}'. Use --output-dir <dir>", args.format),
                 });
             }
         }
@@ -425,7 +426,7 @@ fn handle_extract(args: ExtractArgs, plan_only: bool, json_output: bool) -> Resu
             return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
                 path: PathBuf::new(),
                 reason: format!(
-                    "Unknown format '{}'. Supported formats: pdf, images",
+                    "Unknown format '{}'. Supported formats: pdf, png, jpeg, jpg",
                     args.format
                 ),
             });
