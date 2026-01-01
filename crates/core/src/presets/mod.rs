@@ -12,6 +12,11 @@
 //! For now, presets are hardcoded in the executor. This module provides the
 //! foundation for future YAML-based preset loading.
 
+pub mod loader;
+pub mod model;
+
+use crate::presets::loader::load_presets;
+
 /// Compression strategy configuration for different compression levels.
 #[derive(Debug, Clone)]
 pub struct CompressionStrategy {
@@ -23,60 +28,33 @@ pub struct CompressionStrategy {
 
 /// Get compression strategy for a given compression level.
 ///
-/// Maps our compression levels (light, standard, high) to custom Ghostscript flags
-/// that achieve fast compression by disabling image downsampling and controlling
-/// JPEG quality directly.
-///
-/// # Arguments
-///
-/// * `level` - Compression level: "light", "standard", or "high"
-///
-/// # Returns
-///
-/// CompressionStrategy with tool name and flags to use
-///
-/// # Fast Compression Strategy
-///
-/// We disable expensive image downsampling (`-dDownsample*Images=false`) and rely on
-/// direct JPEG Quality Factor (`/QFactor`) control via Distiller params:
-///
-/// - **Light** (High Quality): QFactor 0.15 (~4.2MB)
-/// - **Standard** (Med Quality): QFactor 0.50 (~3.4MB)
-/// - **High** (Low Quality): QFactor 1.50 (~2.7MB)
-///
-/// All levels run extremely fast (~1s) compared to downsampling methods (~8s+).
+/// Maps compression levels to presets defined in the YAML configuration.
+/// Defaults to "standard" if the requested level is not found.
 pub fn get_compression_strategy(level: &str) -> CompressionStrategy {
-    // Base flags for all Ghostscript operations
-    let mut flags = vec![
-        "-sDEVICE=pdfwrite".to_string(),
-        "-dCompatibilityLevel=1.4".to_string(),
-        "-dNOPAUSE".to_string(),
-        "-dBATCH".to_string(),
-        "-dQUIET".to_string(),
-        // Disable downsampling for speed
-        "-dDownsampleColorImages=false".to_string(),
-        "-dDownsampleGrayImages=false".to_string(),
-        "-dDownsampleMonoImages=false".to_string(),
-    ];
-
-    let q_factor = match level {
-        // Lower QFactor = Higher Quality
-        "light" => "0.15",
-        "standard" => "0.5",
-        "high" => "1.5",
-        _ => "0.5", // Default to standard
+    // Load presets (cached)
+    let config = match load_presets() {
+        Ok(c) => c,
+        Err(e) => {
+            // This should effectively never happen with embedded defaults
+            eprintln!("Failed to load presets: {}", e);
+            // Fallback emergency hardcoded standard
+            return CompressionStrategy {
+                tool: "gs".to_string(),
+                flags: vec!["-sDEVICE=pdfwrite".to_string(), "-dQUIET".to_string()], // Minimal fallback
+            };
+        }
     };
 
-    // Inject Distiller params for JPEG quality
-    flags.push("-c".to_string());
-    flags.push(format!(
-        "<< /ColorACSImageDict << /QFactor {} /Blend 1 /ColorTransform 1 /HSamples [1 1 1 1] /VSamples [1 1 1 1] >> >> setdistillerparams",
-        q_factor
-    ));
+    // Look up preset, default to "standard"
+    let preset = config
+        .presets
+        .get(level)
+        .or_else(|| config.presets.get("standard"))
+        .expect("Standard preset missing from defaults!");
 
     CompressionStrategy {
-        tool: "gs".to_string(),
-        flags,
+        tool: preset.tool.clone(),
+        flags: preset.args.clone(),
     }
 }
 
