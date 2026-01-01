@@ -51,6 +51,28 @@ presets:
       - "-dDownsampleMonoImages=false"
       - "-c"
       - "<< /ColorACSImageDict << /QFactor 1.5 /Blend 1 /ColorTransform 1 /HSamples [1 1 1 1] /VSamples [1 1 1 1] >> >> setdistillerparams"
+
+  xhigh:
+    tool: gs
+    description: "Extreme compression (sub-1MB target, significant quality loss)"
+    args:
+      - "-sDEVICE=pdfwrite"
+      - "-dCompatibilityLevel=1.4"
+      - "-dPDFSETTINGS=/screen"
+      - "-dNOPAUSE"
+      - "-dBATCH"
+      - "-dQUIET"
+      - "-dColorImageDownsampleType=/Bicubic"
+      - "-dColorImageResolution=36"
+      - "-dGrayImageDownsampleType=/Bicubic"
+      - "-dGrayImageResolution=36"
+      - "-dMonoImageDownsampleType=/Subsample"
+      - "-dMonoImageResolution=36"
+      - "-dDownsampleColorImages=true"
+      - "-dDownsampleGrayImages=true"
+      - "-dDownsampleMonoImages=true"
+      - "-c"
+      - "<< /ColorACSImageDict << /QFactor 2.4 /Blend 1 /ColorTransform 1 /HSamples [2 1 1 2] /VSamples [2 1 1 2] >> /GrayACSImageDict << /QFactor 2.4 /Blend 1 /HSamples [2 1 1 2] /VSamples [2 1 1 2] >> >> setdistillerparams"
 "#;
 
 // Global cache for loaded presets
@@ -82,6 +104,7 @@ mod tests {
         assert!(config.presets.contains_key("light"));
         assert!(config.presets.contains_key("standard"));
         assert!(config.presets.contains_key("high"));
+        assert!(config.presets.contains_key("xhigh"));
     }
 
     #[test]
@@ -113,6 +136,21 @@ mod tests {
 
         assert_eq!(high.tool, "gs");
         assert!(high.args.iter().any(|a| a.contains("QFactor 1.5")));
+    }
+
+    #[test]
+    fn test_load_presets_xhigh_preset_correct() {
+        let config = load_presets().expect("Failed to load presets");
+        let xhigh = config.presets.get("xhigh").expect("xhigh preset missing");
+
+        assert_eq!(xhigh.tool, "gs");
+        // xhigh uses aggressive QFactor and downsampling at 36 dpi
+        assert!(xhigh.args.iter().any(|a| a.contains("QFactor 2.4")));
+        assert!(xhigh
+            .args
+            .iter()
+            .any(|a| a.contains("ColorImageResolution=36")));
+        assert!(xhigh.args.iter().any(|a| a.contains("PDFSETTINGS=/screen")));
     }
 
     #[test]
