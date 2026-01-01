@@ -66,3 +66,85 @@ pub fn load_presets() -> Result<&'static PresetsConfig> {
             .expect("Failed to parse default presets! This is a bug in the embedded YAML.")
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_load_presets_returns_valid_config() {
+        let config = load_presets().expect("Failed to load presets");
+
+        // Verify version
+        assert_eq!(config.version, 1);
+
+        // Verify all expected presets exist
+        assert!(config.presets.contains_key("light"));
+        assert!(config.presets.contains_key("standard"));
+        assert!(config.presets.contains_key("high"));
+    }
+
+    #[test]
+    fn test_load_presets_light_preset_correct() {
+        let config = load_presets().expect("Failed to load presets");
+        let light = config.presets.get("light").expect("light preset missing");
+
+        assert_eq!(light.tool, "gs");
+        assert!(light.description.is_some());
+        assert!(light.args.iter().any(|a| a.contains("QFactor 0.15")));
+    }
+
+    #[test]
+    fn test_load_presets_standard_preset_correct() {
+        let config = load_presets().expect("Failed to load presets");
+        let standard = config
+            .presets
+            .get("standard")
+            .expect("standard preset missing");
+
+        assert_eq!(standard.tool, "gs");
+        assert!(standard.args.iter().any(|a| a.contains("QFactor 0.5")));
+    }
+
+    #[test]
+    fn test_load_presets_high_preset_correct() {
+        let config = load_presets().expect("Failed to load presets");
+        let high = config.presets.get("high").expect("high preset missing");
+
+        assert_eq!(high.tool, "gs");
+        assert!(high.args.iter().any(|a| a.contains("QFactor 1.5")));
+    }
+
+    #[test]
+    fn test_load_presets_all_have_required_gs_flags() {
+        let config = load_presets().expect("Failed to load presets");
+
+        for (name, preset) in &config.presets {
+            assert!(
+                preset.args.iter().any(|a| a == "-sDEVICE=pdfwrite"),
+                "Preset '{}' missing -sDEVICE=pdfwrite",
+                name
+            );
+            assert!(
+                preset.args.iter().any(|a| a == "-dNOPAUSE"),
+                "Preset '{}' missing -dNOPAUSE",
+                name
+            );
+            assert!(
+                preset.args.iter().any(|a| a == "-dBATCH"),
+                "Preset '{}' missing -dBATCH",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_load_presets_is_cached() {
+        // Call twice - should return same reference (OnceLock behavior)
+        let config1 = load_presets().expect("First load failed");
+        let config2 = load_presets().expect("Second load failed");
+
+        // Both should point to the same static reference
+        assert!(std::ptr::eq(config1, config2));
+    }
+}
