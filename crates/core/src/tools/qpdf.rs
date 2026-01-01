@@ -174,4 +174,80 @@ mod tests {
             Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }
+
+    #[test]
+    fn test_get_page_count_with_empty_pdf() {
+        let tool = QpdfTool;
+        let config = ToolConfig::default();
+
+        // Skip test if qpdf is not installed
+        let tool_info = match tool.probe(&config) {
+            Ok(info) => info,
+            Err(ForgeKitError::ToolNotFound { .. }) => {
+                println!("Skipping test_get_page_count_with_empty_pdf: qpdf not installed");
+                return;
+            }
+            Err(e) => panic!("Unexpected error probing qpdf: {:?}", e),
+        };
+
+        // Use qpdf to create a valid empty PDF (0 pages)
+        let temp_dir = std::env::temp_dir();
+        let temp_pdf = temp_dir.join("forgekit_test_page_count_empty.pdf");
+
+        // Create a valid 0-page PDF using qpdf --empty
+        let create_result = Command::new(&tool_info.path)
+            .arg("--empty")
+            .arg(&temp_pdf)
+            .output();
+
+        match create_result {
+            Ok(output) if output.status.success() => {
+                // PDF created successfully, now test page count
+                let result = tool.get_page_count(&tool_info.path, &temp_pdf);
+
+                // Cleanup
+                let _ = std::fs::remove_file(&temp_pdf);
+
+                // Verify result - qpdf --empty creates a PDF with 0 pages
+                match result {
+                    Ok(count) => assert_eq!(count, 0, "Expected 0 pages in empty PDF"),
+                    Err(e) => panic!("Failed to get page count: {:?}", e),
+                }
+            }
+            _ => {
+                // Cleanup and skip if we can't create the test PDF
+                let _ = std::fs::remove_file(&temp_pdf);
+                println!("Skipping test: couldn't create test PDF with qpdf --empty");
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_page_count_nonexistent_file() {
+        let tool = QpdfTool;
+        let config = ToolConfig::default();
+
+        // Skip test if qpdf is not installed
+        let tool_info = match tool.probe(&config) {
+            Ok(info) => info,
+            Err(ForgeKitError::ToolNotFound { .. }) => {
+                println!("Skipping test_get_page_count_nonexistent_file: qpdf not installed");
+                return;
+            }
+            Err(e) => panic!("Unexpected error probing qpdf: {:?}", e),
+        };
+
+        let nonexistent = PathBuf::from("/nonexistent/file.pdf");
+        let result = tool.get_page_count(&tool_info.path, &nonexistent);
+
+        // Should fail with ProcessingFailed error
+        assert!(result.is_err());
+        match result {
+            Err(ForgeKitError::ProcessingFailed { tool, .. }) => {
+                assert_eq!(tool, "qpdf");
+            }
+            Err(e) => panic!("Expected ProcessingFailed error, got: {:?}", e),
+            Ok(_) => panic!("Expected error for nonexistent file"),
+        }
+    }
 }
