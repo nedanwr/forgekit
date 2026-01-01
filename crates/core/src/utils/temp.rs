@@ -89,16 +89,16 @@ pub fn create_temp_file_near(path: &Path, prefix: &str, suffix: &str) -> Result<
 /// ```
 /// use forgekit_core::utils::temp::atomic_write;
 /// use forgekit_core::utils::error::Result;
-/// use std::path::Path;
 ///
 /// # fn main() -> Result<()> {
-/// let target_path = Path::new("/tmp/output.txt");
-/// atomic_write(target_path, |temp_path| {
+/// let target_path = std::env::temp_dir().join("forgekit_test_output.txt");
+/// atomic_write(&target_path, |temp_path| {
 ///     // Write your data to temp_path
 ///     std::fs::write(temp_path, b"hello world")?;
 ///     Ok(())
 /// })?;
 /// // target_path now exists with the data, or an error was returned
+/// # std::fs::remove_file(&target_path).ok(); // cleanup
 /// # Ok(())
 /// # }
 /// ```
