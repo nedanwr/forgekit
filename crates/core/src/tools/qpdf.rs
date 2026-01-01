@@ -115,6 +115,36 @@ impl Tool for QpdfTool {
     }
 }
 
+impl QpdfTool {
+    /// Get the number of pages in a PDF file.
+    pub fn get_page_count(&self, tool_path: &Path, pdf_path: &Path) -> Result<u32> {
+        let output = Command::new(tool_path)
+            .arg("--show-npages")
+            .arg(pdf_path)
+            .output()
+            .map_err(|e| ForgeKitError::ProcessingFailed {
+                tool: "qpdf".to_string(),
+                stderr: format!("Failed to run qpdf --show-npages: {}", e),
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "qpdf".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+
+        let count_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        count_str.parse::<u32>().map_err(|_| {
+            ForgeKitError::Other(anyhow::anyhow!(
+                "Failed to parse page count from qpdf output: '{}'",
+                count_str
+            ))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
