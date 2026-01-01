@@ -1,3 +1,4 @@
+use forgekit_core::tools::gs::GsTool;
 use forgekit_core::tools::qpdf::QpdfTool;
 use forgekit_core::tools::{Tool, ToolConfig};
 use forgekit_core::utils::error::Result;
@@ -17,7 +18,8 @@ pub fn handle_check_deps() -> Result<()> {
 
     let tools: Vec<(&'static str, Box<dyn Tool>)> = vec![
         ("qpdf", Box::new(QpdfTool)),
-        // TODO: Add other tools (pdfcpu, ocrmypdf, ffmpeg, libvips, etc.)
+        ("gs", Box::new(GsTool)),
+        // TODO: Add other tools (ocrmypdf, ffmpeg, libvips, etc.)
     ];
 
     let mut all_ok = true;
@@ -57,26 +59,28 @@ pub fn handle_check_deps() -> Result<()> {
         println!("Install missing dependencies individually, or install all at once:\n");
         match platform {
             Platform::MacOS => {
-                println!("  brew install qpdf pdfcpu tesseract ffmpeg libvips exiftool");
+                println!("  brew install qpdf ghostscript tesseract ffmpeg libvips exiftool");
                 println!("  pip3 install ocrmypdf");
             }
             Platform::Windows => {
-                println!("  winget install qpdf.qpdf pdfcpu.pdfcpu tesseract-ocr ffmpeg");
+                println!(
+                    "  winget install qpdf.qpdf ArtifexSoftware.GhostScript tesseract-ocr ffmpeg"
+                );
                 println!("  scoop install libvips exiftool");
                 println!("  pip install ocrmypdf");
             }
             Platform::Linux => {
                 println!("  # Debian/Ubuntu:");
-                println!("  sudo apt install qpdf pdfcpu tesseract-ocr ffmpeg libvips-tools libimage-exiftool-perl");
+                println!("  sudo apt install qpdf ghostscript tesseract-ocr ffmpeg libvips-tools libimage-exiftool-perl");
                 println!("  pip3 install ocrmypdf");
                 println!("\n  # Fedora/RHEL:");
                 println!(
-                    "  sudo dnf install qpdf pdfcpu tesseract ffmpeg libvips perl-Image-ExifTool"
+                    "  sudo dnf install qpdf ghostscript tesseract ffmpeg libvips perl-Image-ExifTool"
                 );
                 println!("  pip3 install ocrmypdf");
                 println!("\n  # Arch Linux:");
                 println!(
-                    "  sudo pacman -S qpdf pdfcpu tesseract ffmpeg libvips perl-image-exiftool"
+                    "  sudo pacman -S qpdf ghostscript tesseract ffmpeg libvips perl-image-exiftool"
                 );
                 println!("  pip3 install ocrmypdf");
             }

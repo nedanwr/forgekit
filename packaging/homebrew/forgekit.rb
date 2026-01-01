@@ -11,7 +11,7 @@ class Forgekit < Formula
 
   depends_on "rust" => :build
   depends_on "qpdf"
-  depends_on "pdfcpu"
+  depends_on "ghostscript"
   depends_on "tesseract"
   depends_on "ffmpeg"
   depends_on "libvips"

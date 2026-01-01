@@ -53,11 +53,55 @@ pub enum JobSpec {
         /// Page specifications defining which pages to extract.
         pages: Vec<PageSpec>,
     },
-    // TODO: Add more job types as we implement them:
-    // PdfCompress { input: PathBuf, output: PathBuf, level: CompressionLevel },
-    // PdfOcr { input: PathBuf, output: PathBuf, language: String },
-    // ImageConvert { input: PathBuf, output: PathBuf, format: ImageFormat },
-    // etc.
+    /// Compress a PDF using Ghostscript with compression level control.
+    ///
+    /// Uses Ghostscript with optimized QFactor settings for fast compression.
+    PdfCompress {
+        /// Input PDF file to compress.
+        input: PathBuf,
+        /// Output PDF file path.
+        output: PathBuf,
+        /// Compression level (light, standard, high).
+        /// Default is "standard" (balanced compression).
+        level: String,
+    },
+    /// Linearize a PDF for fast web viewing.
+    ///
+    /// Optimizes the PDF's internal structure for fast web viewing by reorganizing
+    /// the internal structure. This is a standalone operation separate from merge.
+    PdfLinearize {
+        /// Input PDF file to linearize.
+        input: PathBuf,
+        /// Output PDF file path.
+        output: PathBuf,
+    },
+    /// Reorder pages in a PDF.
+    ///
+    /// Reorders pages according to the specified order (1-indexed page numbers).
+    PdfReorder {
+        /// Input PDF file to reorder.
+        input: PathBuf,
+        /// Output PDF file path.
+        output: PathBuf,
+        /// Page order (1-indexed). Example: [3, 1, 2] means page 3, then 1, then 2.
+        page_order: Vec<u32>,
+    },
+    /// Extract specific pages from a PDF.
+    ///
+    /// Extracts pages matching the page specification. Can output to a single PDF
+    /// file or separate image files per page.
+    PdfExtract {
+        /// Input PDF file to extract from.
+        input: PathBuf,
+        /// Output PDF file path (when format is "pdf").
+        output: Option<PathBuf>,
+        /// Output directory path (when format is "images").
+        output_dir: Option<PathBuf>,
+        /// Page specifications defining which pages to extract.
+        pages: Vec<PageSpec>,
+        /// Output format: "pdf" or "images".
+        format: String,
+    },
 }
 
 impl JobSpec {
@@ -75,6 +119,84 @@ impl JobSpec {
             JobSpec::PdfSplit { pages, .. } => {
                 format!("Split PDF into {} page spec(s)", pages.len())
             }
+            JobSpec::PdfCompress { level, .. } => {
+                format!("Compress PDF with {} compression", level)
+            }
+            JobSpec::PdfLinearize { .. } => "Linearize PDF".to_string(),
+            JobSpec::PdfReorder { page_order, .. } => {
+                format!("Reorder PDF pages ({} pages)", page_order.len())
+            }
+            JobSpec::PdfExtract { pages, format, .. } => {
+                format!(
+                    "Extract {} page spec(s) from PDF as {}",
+                    pages.len(),
+                    format
+                )
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::pages::PageSpec;
+
+    #[test]
+    fn test_pdf_compress_description_with_level() {
+        let spec = JobSpec::PdfCompress {
+            input: PathBuf::from("input.pdf"),
+            output: PathBuf::from("output.pdf"),
+            level: "high".to_string(),
+        };
+        assert_eq!(spec.description(), "Compress PDF with high compression");
+    }
+
+    #[test]
+    fn test_pdf_compress_description_standard() {
+        let spec = JobSpec::PdfCompress {
+            input: PathBuf::from("input.pdf"),
+            output: PathBuf::from("output.pdf"),
+            level: "standard".to_string(),
+        };
+        assert_eq!(spec.description(), "Compress PDF with standard compression");
+    }
+
+    #[test]
+    fn test_pdf_linearize_description() {
+        let spec = JobSpec::PdfLinearize {
+            input: PathBuf::from("input.pdf"),
+            output: PathBuf::from("output.pdf"),
+        };
+        assert_eq!(spec.description(), "Linearize PDF");
+    }
+
+    #[test]
+    fn test_pdf_reorder_description() {
+        let spec = JobSpec::PdfReorder {
+            input: PathBuf::from("input.pdf"),
+            output: PathBuf::from("output.pdf"),
+            page_order: vec![3, 1, 2],
+        };
+        assert_eq!(spec.description(), "Reorder PDF pages (3 pages)");
+    }
+
+    #[test]
+    fn test_pdf_extract_description() {
+        let pages = vec![
+            PageSpec::Range {
+                start: 1,
+                end: Some(5),
+            },
+            PageSpec::Page(10),
+        ];
+        let spec = JobSpec::PdfExtract {
+            input: PathBuf::from("input.pdf"),
+            output: Some(PathBuf::from("output.pdf")),
+            output_dir: None,
+            pages,
+            format: "pdf".to_string(),
+        };
+        assert_eq!(spec.description(), "Extract 2 page spec(s) from PDF as pdf");
     }
 }

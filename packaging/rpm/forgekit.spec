@@ -12,7 +12,7 @@ Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  rust
 Requires:       qpdf
-Requires:       pdfcpu
+Requires:       ghostscript
 Requires:       tesseract
 Requires:       ffmpeg
 Requires:       libvips

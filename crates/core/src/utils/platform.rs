@@ -121,7 +121,22 @@ impl ToolInstallHints {
 
         match tool {
             "qpdf" => platform.install_hint("qpdf"),
-            "pdfcpu" => platform.install_hint("pdfcpu"),
+            "gs" | "ghostscript" => match platform {
+                Platform::MacOS => "brew install ghostscript".to_string(),
+                Platform::Windows => "winget install ArtifexSoftware.GhostScript".to_string(),
+                Platform::Linux => {
+                    let distro = detect_linux_distro();
+                    match distro {
+                        LinuxDistro::Debian => "sudo apt install ghostscript".to_string(),
+                        LinuxDistro::Fedora => "sudo dnf install ghostscript".to_string(),
+                        LinuxDistro::Arch => "sudo pacman -S ghostscript".to_string(),
+                        LinuxDistro::Unknown => {
+                            "Install ghostscript using your package manager".to_string()
+                        }
+                    }
+                }
+                Platform::Unknown => "Install ghostscript using your package manager".to_string(),
+            },
             "tesseract" => match platform {
                 Platform::MacOS => "brew install tesseract".to_string(),
                 Platform::Windows => "winget install tesseract-ocr".to_string(),
