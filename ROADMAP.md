@@ -1,8 +1,8 @@
 # ForgeKit Beta-MVP Roadmap (CLI-First)
 
 **Last Updated**: December 2025  
-**Status**: Core foundation complete, PDF merge/split implemented, dependency management complete  
-**Current Version**: v0.0.3
+**Status**: Core foundation complete, PDF merge/split/compress/extract implemented, dependency management complete  
+**Current Version**: v0.0.4
 
 ## Versioning Strategy
 
@@ -61,20 +61,20 @@
 - ✅ Documentation for dependency installation per platform
 - ✅ Tests for dependency checking (10 integration tests covering tool probing, platform detection, install hints, and error handling)
 
-#### v0.0.4 - PDF Advanced Operations 📋
+#### v0.0.4 - PDF Advanced Operations ✅
 
-**Status**: Pending
+**Status**: Completed
 
 **Deliverables**:
 
-- PDF compress command (`pdf compress`) with preset support
-- PDF linearize command (`pdf linearize`) as standalone subcommand
-- PDF reorder command (`pdf reorder`) with page ordering
-- PDF extract command (`pdf extract`) with page selection
-- pdfcpu tool adapter (probe, version, execute)
-- Preset system foundation (YAML loader and parser)
-- Tests for new PDF operations
-- Integration with existing pages grammar parser
+- ✅ PDF compress command (`pdf compress`) with preset support
+- ✅ PDF linearize command (`pdf linearize`) as standalone subcommand
+- ✅ PDF reorder command (`pdf reorder`) with page ordering
+- ✅ PDF extract command (`pdf extract`) with page selection
+- ✅ ghostscript tool adapter (probe, version, execute)
+- ✅ Preset system foundation (YAML loader and parser)
+- ✅ Tests for new PDF operations
+- ✅ Integration with existing pages grammar parser
 
 #### v0.0.5 - PDF OCR and Metadata 📋
 
@@ -221,18 +221,18 @@
 - **Testing**: 20 tests passing (13 unit, 2 integration, 5 doc tests)
 - **Dependency Checking**: `check-deps` command implemented
 
-**Current Version**: v0.0.3 (completed)
+**Current Version**: v0.0.4 (completed)
 
 ### 🔄 In Progress
 
-- **v0.0.3**: Dependency Management (branch: `feat/dependency-management`)
+- **v0.0.5**: PDF OCR and Metadata
 
 ### 📋 Pending Features
 
-- PDF: compress, linearize (as subcommand), reorder, extract, OCR, metadata
+- PDF: OCR, metadata
 - Image: convert, resize, strip
 - Media: transcode, audio convert/normalize
-- Preset system (YAML)
+- Preset system (YAML) ✅
 - Package creation (deb, rpm, Homebrew, winget)
 - CI/CD setup with package building
 
@@ -339,7 +339,7 @@
 **Minimum versions**:
 
 - qpdf: 10.0+
-- pdfcpu: 0.4+
+- ghostscript: 0.4+
 - ocrmypdf: 14.0+ (Python 3.8+)
 - tesseract: 5.0+
 - ffmpeg: 5.0+
@@ -383,7 +383,7 @@
 version: 1
 presets:
   pdf-compress-web:
-    tool: pdfcpu
+    tool: ghostscript
     args: ["optimize", "-level=2"]
   image-webp-web:
     tool: libvips
@@ -423,7 +423,7 @@ tools/                    # External tool adapters
   mod.rs
   trait_def.rs           # Tool trait: probe(), version(), execute()
   qpdf.rs                # qpdf adapter
-  pdfcpu.rs              # pdfcpu adapter
+  ghostscript.rs              # ghostscript adapter
   ocrmypdf.rs            # ocrmypdf adapter
   ffmpeg.rs              # ffmpeg adapter
   libvips.rs             # libvips adapter
@@ -487,7 +487,7 @@ pub enum JobSpec {
 
 **qpdf**: Parse stderr for "Processing page X of Y" → `current=X, total=Y`
 
-**pdfcpu**: Parse JSON output mode if available, else stderr "page X/Y"
+**ghostscript**: Parse JSON output mode if available, else stderr "page X/Y"
 
 **ocrmypdf**: Parse progress bar: `[████████░░░░░░░░] 50%` → estimate from file size
 
@@ -751,7 +751,7 @@ SEE ALSO:
 **Required dependencies**:
 
 - **qpdf** 11.x+ (PDF manipulation)
-- **pdfcpu** 0.4+ (PDF compression/optimization)
+- **ghostscript** 0.4+ (PDF compression/optimization)
 - **tesseract** 5.0+ (OCR engine)
 - **ocrmypdf** 14.0+ (Python wrapper for OCR, installed via pip)
 - **ffmpeg** 5.0+ (audio/video processing)
@@ -770,14 +770,14 @@ SEE ALSO:
 **Debian/Ubuntu** (`.deb` package):
 
 ```deb
-Depends: qpdf (>= 11.0), pdfcpu, tesseract-ocr (>= 5.0), ffmpeg (>= 5.0), libvips-tools (>= 8.12), libimage-exiftool-perl (>= 12.0), python3, python3-pip
+Depends: qpdf (>= 11.0), ghostscript, tesseract-ocr (>= 5.0), ffmpeg (>= 5.0), libvips-tools (>= 8.12), libimage-exiftool-perl (>= 12.0), python3, python3-pip
 ```
 
 **macOS** (Homebrew formula):
 
 ```ruby
 depends_on "qpdf" => ">= 11.0"
-depends_on "pdfcpu"
+depends_on "ghostscript"
 depends_on "tesseract" => ">= 5.0"
 depends_on "ffmpeg" => ">= 5.0"
 depends_on "libvips" => ">= 8.12"
@@ -791,7 +791,7 @@ depends_on "python@3"
 Dependencies:
   - PackageIdentifier: qpdf.qpdf
     MinimumVersion: 11.0.0
-  - PackageIdentifier: pdfcpu.pdfcpu
+  - PackageIdentifier: ghostscript.ghostscript
   - PackageIdentifier: tesseract-ocr
   - PackageIdentifier: ffmpeg
   - PackageIdentifier: Python.Python.3
@@ -813,10 +813,10 @@ Dependencies:
 **macOS**:
 
 - **Homebrew formula** (primary): `brew install forgekit`
-  - Automatically installs dependencies (qpdf, pdfcpu, tesseract, etc.)
+  - Automatically installs dependencies (qpdf, ghostscript, tesseract, etc.)
   - Binary installed to `/opt/homebrew/bin/forgekit` or `/usr/local/bin/forgekit`
 - **Binary release** (fallback): `.tar.gz` with just the binary
-  - Users manually install dependencies via `brew install qpdf pdfcpu ...`
+  - Users manually install dependencies via `brew install qpdf ghostscript ...`
 - Optional: `.pkg` installer (post-beta-MVP)
 
 **Windows**:
@@ -942,22 +942,22 @@ Dependencies:
 version: 1
 presets:
   pdf-compress-web:
-    tool: pdfcpu
+    tool: ghostscript
     description: "Web-optimized (smallest size, lower quality)"
     args: ["optimize", "-level=2", "-compression=compress"]
 
   pdf-compress-screen:
-    tool: pdfcpu
+    tool: ghostscript
     description: "Screen viewing (balanced)"
     args: ["optimize", "-level=3", "-compression=compress"]
 
   pdf-compress-printer:
-    tool: pdfcpu
+    tool: ghostscript
     description: "Print quality (higher quality)"
     args: ["optimize", "-level=4", "-compression=compress"]
 
   pdf-compress-hq:
-    tool: pdfcpu
+    tool: ghostscript
     description: "High quality (minimal compression)"
     args: ["optimize", "-level=5", "-compression=compress"]
 ```
@@ -1075,7 +1075,7 @@ presets:
 
 **Acceptance criteria**:
 
-- pdfcpu compress/optimize
+- ghostscript compress/optimize
 - OCR with ocrmypdf (basic)
 - Metadata read/write with exiftool
 - CLI `pdf compress/ocr/metadata` subcommands
