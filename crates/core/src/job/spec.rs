@@ -415,4 +415,45 @@ mod tests {
         };
         assert_eq!(spec.description(), "Strip image metadata");
     }
+
+    #[test]
+    fn test_image_resize_description_height_only() {
+        let spec = JobSpec::ImageResize {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("thumb.jpg"),
+            width: None,
+            height: Some(600),
+        };
+        assert_eq!(spec.description(), "Resize image to height 600");
+    }
+
+    // Compress tests (compress uses ImageConvert with compression settings)
+
+    #[test]
+    fn test_image_compress_jpeg_description() {
+        // JPEG compress shows quality
+        let spec = JobSpec::ImageConvert {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("photo_compressed.jpg"),
+            format: ImageFormat::Jpeg,
+            quality: Some(80),
+            compression: None,
+            strip_metadata: true,
+        };
+        assert_eq!(spec.description(), "Convert image to jpg (quality 80)");
+    }
+
+    #[test]
+    fn test_image_compress_png_description() {
+        // PNG compress doesn't show quality (uses compression level instead)
+        let spec = JobSpec::ImageConvert {
+            input: PathBuf::from("image.png"),
+            output: PathBuf::from("image_compressed.png"),
+            format: ImageFormat::Png,
+            quality: None,
+            compression: Some(9),
+            strip_metadata: true,
+        };
+        assert_eq!(spec.description(), "Convert image to png");
+    }
 }
