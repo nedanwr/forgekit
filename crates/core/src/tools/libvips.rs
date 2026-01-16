@@ -117,6 +117,7 @@ impl LibvipsTool {
     /// Convert image format with optional quality, compression, and strip options.
     ///
     /// Uses `vips copy input output[Q=quality,compression=level,strip]` syntax.
+    #[allow(clippy::too_many_arguments)]
     pub fn convert(
         &self,
         tool_path: &Path,
