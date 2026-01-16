@@ -147,7 +147,7 @@ pub enum JobSpec {
     // ========== Image Operations ==========
     /// Convert image to a different format.
     ///
-    /// Uses libvips (preferred) or ImageMagick (fallback) for conversion.
+    /// Uses libvips for conversion.
     /// Supports JPEG, PNG, WebP, AVIF, TIFF, and GIF formats.
     ImageConvert {
         /// Input image file.
@@ -158,6 +158,8 @@ pub enum JobSpec {
         format: ImageFormat,
         /// Quality (0-100). Format-dependent: JPEG/WebP/AVIF use this.
         quality: Option<u8>,
+        /// Compression level (0-9). For PNG: 0=fastest, 9=smallest.
+        compression: Option<u8>,
         /// Strip metadata during conversion.
         strip_metadata: bool,
     },
@@ -364,6 +366,7 @@ mod tests {
             output: PathBuf::from("photo.webp"),
             format: ImageFormat::WebP,
             quality: Some(80),
+            compression: None,
             strip_metadata: false,
         };
         assert_eq!(spec.description(), "Convert image to webp (quality 80)");
@@ -376,6 +379,7 @@ mod tests {
             output: PathBuf::from("photo.png"),
             format: ImageFormat::Png,
             quality: None,
+            compression: Some(0),
             strip_metadata: true,
         };
         assert_eq!(spec.description(), "Convert image to png");
