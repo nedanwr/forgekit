@@ -14,6 +14,17 @@
 use crate::utils::pages::PageSpec;
 use std::path::PathBuf;
 
+/// Action to perform on PDF metadata
+#[derive(Debug, Clone)]
+pub enum MetadataAction {
+    /// Read all metadata as JSON
+    GetAll,
+    /// Read a specific field
+    Get(String),
+    /// Set one or more fields (field name, value)
+    Set(Vec<(String, String)>),
+}
+
 /// A job specification describing what operation to perform.
 ///
 /// This is pure data - it doesn't execute anything. The executor (`job::executor`)
@@ -102,6 +113,35 @@ pub enum JobSpec {
         /// Output format: "pdf" or "images".
         format: String,
     },
+    /// Add OCR text layer to a scanned PDF.
+    ///
+    /// Uses ocrmypdf to add a searchable text layer to scanned PDFs.
+    /// The original image quality is preserved.
+    PdfOcr {
+        /// Input PDF file to OCR.
+        input: PathBuf,
+        /// Output PDF file path.
+        output: PathBuf,
+        /// OCR language (e.g., "eng", "deu", "fra"). Default is "eng".
+        language: String,
+        /// Skip pages that already have text (faster for mixed documents).
+        skip_text: bool,
+        /// Deskew pages before OCR (corrects tilted scans).
+        deskew: bool,
+        /// Force OCR even if text already exists (redo OCR).
+        force_ocr: bool,
+    },
+    /// Read or write PDF metadata.
+    ///
+    /// Uses exiftool to get/set PDF metadata fields like title, author, subject, etc.
+    PdfMetadata {
+        /// Input PDF file.
+        input: PathBuf,
+        /// Output PDF file path (only needed for set operations, optional for get).
+        output: Option<PathBuf>,
+        /// The metadata action to perform.
+        action: MetadataAction,
+    },
 }
 
 impl JobSpec {
@@ -133,6 +173,16 @@ impl JobSpec {
                     format
                 )
             }
+            JobSpec::PdfOcr { language, .. } => {
+                format!("OCR PDF with language '{}'", language)
+            }
+            JobSpec::PdfMetadata { action, .. } => match action {
+                MetadataAction::GetAll => "Read all PDF metadata".to_string(),
+                MetadataAction::Get(field) => format!("Read PDF metadata field '{}'", field),
+                MetadataAction::Set(fields) => {
+                    format!("Set {} PDF metadata field(s)", fields.len())
+                }
+            },
         }
     }
 }
@@ -198,5 +248,51 @@ mod tests {
             format: "pdf".to_string(),
         };
         assert_eq!(spec.description(), "Extract 2 page spec(s) from PDF as pdf");
+    }
+
+    #[test]
+    fn test_pdf_ocr_description() {
+        let spec = JobSpec::PdfOcr {
+            input: PathBuf::from("scan.pdf"),
+            output: PathBuf::from("searchable.pdf"),
+            language: "eng".to_string(),
+            skip_text: true,
+            deskew: false,
+            force_ocr: false,
+        };
+        assert_eq!(spec.description(), "OCR PDF with language 'eng'");
+    }
+
+    #[test]
+    fn test_pdf_metadata_get_all_description() {
+        let spec = JobSpec::PdfMetadata {
+            input: PathBuf::from("doc.pdf"),
+            output: None,
+            action: MetadataAction::GetAll,
+        };
+        assert_eq!(spec.description(), "Read all PDF metadata");
+    }
+
+    #[test]
+    fn test_pdf_metadata_get_field_description() {
+        let spec = JobSpec::PdfMetadata {
+            input: PathBuf::from("doc.pdf"),
+            output: None,
+            action: MetadataAction::Get("title".to_string()),
+        };
+        assert_eq!(spec.description(), "Read PDF metadata field 'title'");
+    }
+
+    #[test]
+    fn test_pdf_metadata_set_description() {
+        let spec = JobSpec::PdfMetadata {
+            input: PathBuf::from("doc.pdf"),
+            output: Some(PathBuf::from("updated.pdf")),
+            action: MetadataAction::Set(vec![
+                ("title".to_string(), "My Document".to_string()),
+                ("author".to_string(), "John Doe".to_string()),
+            ]),
+        };
+        assert_eq!(spec.description(), "Set 2 PDF metadata field(s)");
     }
 }
