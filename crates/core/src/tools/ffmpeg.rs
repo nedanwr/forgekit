@@ -641,6 +641,447 @@ impl FfmpegTool {
         parts.push(output.display().to_string());
         parts.join(" ")
     }
+
+    /// Trim video to a specific time range using stream copy (fast, no re-encoding).
+    pub fn video_trim(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+        start: Option<f64>,
+        end: Option<f64>,
+    ) -> Result<()> {
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y"); // Overwrite output
+
+        // Add start time before input for fast seeking
+        if let Some(start) = start {
+            cmd.arg("-ss").arg(format!("{:.3}", start));
+        }
+
+        cmd.arg("-i").arg(input);
+
+        // Add end time / duration
+        if let Some(end) = end {
+            if let Some(start) = start {
+                // Duration from start
+                let duration = end - start;
+                cmd.arg("-t").arg(format!("{:.3}", duration));
+            } else {
+                // End time from beginning
+                cmd.arg("-to").arg(format!("{:.3}", end));
+            }
+        }
+
+        // Use stream copy for fast trimming (no re-encoding)
+        cmd.arg("-c").arg("copy");
+        cmd.arg(output);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video trim.
+    pub fn plan_video_trim(
+        input: &Path,
+        output: &Path,
+        start: Option<f64>,
+        end: Option<f64>,
+    ) -> String {
+        let mut parts = vec!["ffmpeg".to_string(), "-y".to_string()];
+
+        if let Some(start) = start {
+            parts.push("-ss".to_string());
+            parts.push(format!("{:.3}", start));
+        }
+
+        parts.push("-i".to_string());
+        parts.push(input.display().to_string());
+
+        if let Some(end) = end {
+            if let Some(start) = start {
+                let duration = end - start;
+                parts.push("-t".to_string());
+                parts.push(format!("{:.3}", duration));
+            } else {
+                parts.push("-to".to_string());
+                parts.push(format!("{:.3}", end));
+            }
+        }
+
+        parts.push("-c".to_string());
+        parts.push("copy".to_string());
+        parts.push(output.display().to_string());
+        parts.join(" ")
+    }
+
+    /// Join multiple video files using concat demuxer.
+    /// All inputs must have the same codec/resolution/frame rate.
+    pub fn video_join(
+        &self,
+        tool_path: &Path,
+        inputs: &[PathBuf],
+        output: &Path,
+    ) -> Result<()> {
+        use std::io::Write;
+
+        // Create concat file list
+        let temp_dir = std::env::temp_dir();
+        let concat_file = temp_dir.join(format!("forgekit_concat_{}.txt", uuid::Uuid::new_v4()));
+
+        {
+            let mut file = std::fs::File::create(&concat_file)?;
+            for input in inputs {
+                writeln!(file, "file '{}'", input.canonicalize()?.display())?;
+            }
+        }
+
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y")
+            .arg("-f").arg("concat")
+            .arg("-safe").arg("0")
+            .arg("-i").arg(&concat_file)
+            .arg("-c").arg("copy")
+            .arg(output);
+
+        let output_result = cmd.output()?;
+
+        // Clean up concat file
+        let _ = std::fs::remove_file(&concat_file);
+
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video join.
+    pub fn plan_video_join(inputs: &[PathBuf], output: &Path) -> String {
+        let files_str = inputs
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "ffmpeg -y -f concat -safe 0 -i <concat_list: {}> -c copy {}",
+            files_str,
+            output.display()
+        )
+    }
+
+    /// Extract a thumbnail frame from video at a specific timestamp.
+    pub fn video_thumbnail(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+        timestamp: f64,
+    ) -> Result<()> {
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y")
+            .arg("-ss").arg(format!("{:.3}", timestamp))
+            .arg("-i").arg(input)
+            .arg("-frames:v").arg("1")
+            .arg("-q:v").arg("2")
+            .arg(output);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video thumbnail.
+    pub fn plan_video_thumbnail(input: &Path, output: &Path, timestamp: f64) -> String {
+        format!(
+            "ffmpeg -y -ss {:.3} -i {} -frames:v 1 -q:v 2 {}",
+            timestamp,
+            input.display(),
+            output.display()
+        )
+    }
+
+    /// Convert video to animated GIF.
+    #[allow(clippy::too_many_arguments)]
+    pub fn video_gif(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+        start: Option<f64>,
+        duration: Option<f64>,
+        width: Option<u32>,
+        fps: Option<u32>,
+    ) -> Result<()> {
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y");
+
+        if let Some(s) = start {
+            cmd.arg("-ss").arg(format!("{:.3}", s));
+        }
+
+        cmd.arg("-i").arg(input);
+
+        if let Some(d) = duration {
+            cmd.arg("-t").arg(format!("{:.3}", d));
+        }
+
+        // Build filter for fps and scale
+        let fps_val = fps.unwrap_or(10);
+        let filter = if let Some(w) = width {
+            format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
+        } else {
+            format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
+        };
+
+        cmd.arg("-filter_complex").arg(&filter);
+        cmd.arg(output);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video to GIF conversion.
+    pub fn plan_video_gif(
+        input: &Path,
+        output: &Path,
+        start: Option<f64>,
+        duration: Option<f64>,
+        width: Option<u32>,
+        fps: Option<u32>,
+    ) -> String {
+        let mut parts = vec!["ffmpeg".to_string(), "-y".to_string()];
+
+        if let Some(s) = start {
+            parts.push("-ss".to_string());
+            parts.push(format!("{:.3}", s));
+        }
+
+        parts.push("-i".to_string());
+        parts.push(input.display().to_string());
+
+        if let Some(d) = duration {
+            parts.push("-t".to_string());
+            parts.push(format!("{:.3}", d));
+        }
+
+        let fps_val = fps.unwrap_or(10);
+        let filter = if let Some(w) = width {
+            format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
+        } else {
+            format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
+        };
+
+        parts.push("-filter_complex".to_string());
+        parts.push(format!("\"{}\"", filter));
+        parts.push(output.display().to_string());
+        parts.join(" ")
+    }
+
+    /// Change video playback speed.
+    pub fn video_speed(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+        speed: f64,
+    ) -> Result<()> {
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y")
+            .arg("-i").arg(input);
+
+        // Video speed: setpts=PTS/speed (e.g., 2x = PTS/2, 0.5x = PTS/0.5)
+        // Audio speed: atempo filter (only supports 0.5 to 2.0, chain for more)
+        let video_filter = format!("setpts=PTS/{}", speed);
+
+        // Audio tempo - chain atempo filters if needed for extreme speeds
+        let audio_filters = build_atempo_chain(speed);
+
+        cmd.arg("-filter:v").arg(&video_filter);
+
+        if !audio_filters.is_empty() {
+            cmd.arg("-filter:a").arg(&audio_filters);
+        } else {
+            cmd.arg("-an"); // No audio if speed is too extreme
+        }
+
+        cmd.arg(output);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video speed change.
+    pub fn plan_video_speed(input: &Path, output: &Path, speed: f64) -> String {
+        let video_filter = format!("setpts=PTS/{}", speed);
+        let audio_filters = build_atempo_chain(speed);
+
+        if !audio_filters.is_empty() {
+            format!(
+                "ffmpeg -y -i {} -filter:v {} -filter:a {} {}",
+                input.display(),
+                video_filter,
+                audio_filters,
+                output.display()
+            )
+        } else {
+            format!(
+                "ffmpeg -y -i {} -filter:v {} -an {}",
+                input.display(),
+                video_filter,
+                output.display()
+            )
+        }
+    }
+
+    /// Rotate video by specified degrees.
+    pub fn video_rotate(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+        degrees: u32,
+    ) -> Result<()> {
+        let transpose = match degrees {
+            90 => "transpose=1",      // 90 clockwise
+            180 => "transpose=1,transpose=1", // 180
+            270 => "transpose=2",     // 90 counter-clockwise (270 clockwise)
+            _ => return Err(ForgeKitError::InvalidInput {
+                path: input.to_path_buf(),
+                reason: format!("Invalid rotation angle {}. Use 90, 180, or 270.", degrees),
+            }),
+        };
+
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y")
+            .arg("-i").arg(input)
+            .arg("-vf").arg(transpose)
+            .arg("-c:a").arg("copy")
+            .arg(output);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video rotation.
+    pub fn plan_video_rotate(input: &Path, output: &Path, degrees: u32) -> String {
+        let transpose = match degrees {
+            90 => "transpose=1",
+            180 => "transpose=1,transpose=1",
+            270 => "transpose=2",
+            _ => "transpose=1",
+        };
+        format!(
+            "ffmpeg -y -i {} -vf {} -c:a copy {}",
+            input.display(),
+            transpose,
+            output.display()
+        )
+    }
+
+    /// Remove audio track from video.
+    pub fn video_mute(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+    ) -> Result<()> {
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y")
+            .arg("-i").arg(input)
+            .arg("-c:v").arg("copy")
+            .arg("-an")
+            .arg(output);
+
+        let output_result = cmd.output()?;
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video mute.
+    pub fn plan_video_mute(input: &Path, output: &Path) -> String {
+        format!(
+            "ffmpeg -y -i {} -c:v copy -an {}",
+            input.display(),
+            output.display()
+        )
+    }
+}
+
+/// Build atempo filter chain for speed changes.
+/// atempo only supports 0.5 to 2.0, so we chain multiple for extreme speeds.
+fn build_atempo_chain(speed: f64) -> String {
+    if !(0.5..=2.0).contains(&speed) {
+        // For extreme speeds, chain atempo filters
+        let mut filters = Vec::new();
+        let mut remaining = speed;
+
+        while remaining > 2.0 {
+            filters.push("atempo=2.0".to_string());
+            remaining /= 2.0;
+        }
+        while remaining < 0.5 {
+            filters.push("atempo=0.5".to_string());
+            remaining /= 0.5;
+        }
+
+        if (remaining - 1.0).abs() > 0.01 {
+            filters.push(format!("atempo={:.3}", remaining));
+        }
+
+        if filters.is_empty() {
+            String::new()
+        } else {
+            filters.join(",")
+        }
+    } else if (speed - 1.0).abs() < 0.01 {
+        String::new() // No change needed
+    } else {
+        format!("atempo={:.3}", speed)
+    }
 }
 
 #[cfg(test)]
