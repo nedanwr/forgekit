@@ -64,7 +64,7 @@ enum Commands {
     #[command(subcommand)]
     Image(ImageCommand),
 
-    /// Audio operations (convert, normalize)
+    /// Audio operations (convert, normalize, trim, join, etc.)
     #[command(subcommand)]
     Audio(AudioCommand),
 
