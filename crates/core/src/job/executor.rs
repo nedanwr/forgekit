@@ -127,8 +127,9 @@ pub fn execute_job_with_progress(
             output,
             format,
             quality,
+            compression,
             strip_metadata,
-        } => execute_image_convert(input, output, format, *quality, *strip_metadata, plan_only),
+        } => execute_image_convert(input, output, format, *quality, *compression, *strip_metadata, plan_only),
         JobSpec::ImageResize {
             input,
             output,
@@ -1073,11 +1074,12 @@ fn execute_image_convert(
     output: &Path,
     format: &ImageFormat,
     quality: Option<u8>,
+    compression: Option<u8>,
     strip: bool,
     plan_only: bool,
 ) -> Result<String> {
     if plan_only {
-        return Ok(LibvipsTool::plan_convert(input, output, quality, strip));
+        return Ok(LibvipsTool::plan_convert(input, output, quality, compression, strip));
     }
 
     if !input.exists() {
@@ -1089,7 +1091,7 @@ fn execute_image_convert(
 
     let tool_info = probe_libvips()?;
     let tool = LibvipsTool;
-    tool.convert(&tool_info.path, input, output, format, quality, strip)?;
+    tool.convert(&tool_info.path, input, output, format, quality, compression, strip)?;
 
     Ok(format!(
         "Successfully converted image to {} ({})",
@@ -1459,7 +1461,7 @@ mod image_operation_tests {
         let output = PathBuf::from("photo.webp");
 
         let result =
-            execute_image_convert(&input, &output, &ImageFormat::WebP, Some(80), true, true)
+            execute_image_convert(&input, &output, &ImageFormat::WebP, Some(80), None, true, true)
                 .unwrap();
 
         // Plan uses libvips format
@@ -1475,11 +1477,13 @@ mod image_operation_tests {
         let output = PathBuf::from("photo.png");
 
         let result =
-            execute_image_convert(&input, &output, &ImageFormat::Png, None, false, true).unwrap();
+            execute_image_convert(&input, &output, &ImageFormat::Png, None, Some(0), false, true)
+                .unwrap();
 
         assert!(result.contains("vips copy"));
         assert!(result.contains("photo.png"));
         assert!(!result.contains("Q="));
+        assert!(result.contains("compression=0"));
         assert!(!result.contains("strip"));
     }
 
