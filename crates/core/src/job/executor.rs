@@ -28,7 +28,6 @@ use crate::job::JobSpec;
 use crate::presets::get_compression_strategy;
 use crate::tools::exiftool::ExiftoolTool;
 use crate::tools::gs::GsTool;
-use crate::tools::imagemagick::ImageMagickTool;
 use crate::tools::libvips::LibvipsTool;
 use crate::tools::ocrmypdf::OcrmypdfTool;
 use crate::tools::qpdf::QpdfTool;
@@ -1062,29 +1061,11 @@ fn execute_pdf_metadata_set(
 
 // ========== Image Operations ==========
 
-/// Select the best available image tool (libvips preferred, ImageMagick fallback).
-///
-/// Returns the tool name ("vips" or "magick") and its path.
-fn select_image_tool() -> Result<(String, ToolInfo)> {
+/// Probe for libvips tool.
+fn probe_libvips() -> Result<ToolInfo> {
+    let tool = LibvipsTool;
     let config = ToolConfig::default();
-
-    // Try libvips first (faster)
-    let vips = LibvipsTool;
-    if let Ok(info) = vips.probe(&config) {
-        return Ok(("vips".to_string(), info));
-    }
-
-    // Fall back to ImageMagick
-    let magick = ImageMagickTool;
-    if let Ok(info) = magick.probe(&config) {
-        return Ok(("magick".to_string(), info));
-    }
-
-    Err(ForgeKitError::ToolNotFound {
-        tool: "image processor".to_string(),
-        hint: "Install libvips (brew install vips) or ImageMagick (brew install imagemagick)"
-            .to_string(),
-    })
+    tool.probe(&config)
 }
 
 fn execute_image_convert(
@@ -1096,7 +1077,6 @@ fn execute_image_convert(
     plan_only: bool,
 ) -> Result<String> {
     if plan_only {
-        // Generate plan for libvips (preferred)
         return Ok(LibvipsTool::plan_convert(input, output, quality, strip));
     }
 
@@ -1107,19 +1087,9 @@ fn execute_image_convert(
         });
     }
 
-    let (tool_name, tool_info) = select_image_tool()?;
-
-    match tool_name.as_str() {
-        "vips" => {
-            let tool = LibvipsTool;
-            tool.convert(&tool_info.path, input, output, format, quality, strip)?;
-        }
-        "magick" => {
-            let tool = ImageMagickTool;
-            tool.convert(&tool_info.path, input, output, format, quality, strip)?;
-        }
-        _ => unreachable!(),
-    }
+    let tool_info = probe_libvips()?;
+    let tool = LibvipsTool;
+    tool.convert(&tool_info.path, input, output, format, quality, strip)?;
 
     Ok(format!(
         "Successfully converted image to {} ({})",
@@ -1143,7 +1113,6 @@ fn execute_image_resize(
     }
 
     if plan_only {
-        // Generate plan for libvips (preferred)
         return Ok(LibvipsTool::plan_resize(input, output, width, height));
     }
 
@@ -1154,19 +1123,9 @@ fn execute_image_resize(
         });
     }
 
-    let (tool_name, tool_info) = select_image_tool()?;
-
-    match tool_name.as_str() {
-        "vips" => {
-            let tool = LibvipsTool;
-            tool.resize(&tool_info.path, input, output, width, height)?;
-        }
-        "magick" => {
-            let tool = ImageMagickTool;
-            tool.resize(&tool_info.path, input, output, width, height)?;
-        }
-        _ => unreachable!(),
-    }
+    let tool_info = probe_libvips()?;
+    let tool = LibvipsTool;
+    tool.resize(&tool_info.path, input, output, width, height)?;
 
     let size_str = match (width, height) {
         (Some(w), Some(h)) => format!("{}x{}", w, h),
@@ -1184,7 +1143,6 @@ fn execute_image_resize(
 
 fn execute_image_strip(input: &Path, output: &Path, plan_only: bool) -> Result<String> {
     if plan_only {
-        // Generate plan for libvips (preferred)
         return Ok(LibvipsTool::plan_strip(input, output));
     }
 
@@ -1195,19 +1153,9 @@ fn execute_image_strip(input: &Path, output: &Path, plan_only: bool) -> Result<S
         });
     }
 
-    let (tool_name, tool_info) = select_image_tool()?;
-
-    match tool_name.as_str() {
-        "vips" => {
-            let tool = LibvipsTool;
-            tool.strip_metadata(&tool_info.path, input, output)?;
-        }
-        "magick" => {
-            let tool = ImageMagickTool;
-            tool.strip_metadata(&tool_info.path, input, output)?;
-        }
-        _ => unreachable!(),
-    }
+    let tool_info = probe_libvips()?;
+    let tool = LibvipsTool;
+    tool.strip_metadata(&tool_info.path, input, output)?;
 
     Ok(format!(
         "Successfully stripped metadata from image: {}",
