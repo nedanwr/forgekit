@@ -17,7 +17,7 @@
 //! When `plan_only` is true, we skip execution and just return the command that
 //! would be run. This is great for transparency and debugging.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::job::progress::{
@@ -117,7 +117,7 @@ pub fn execute_job_with_progress(
             input,
             output,
             action,
-        } => execute_pdf_metadata(input, output.as_ref(), action, plan_only),
+        } => execute_pdf_metadata(input, output.as_deref(), action, plan_only),
     }
 }
 
@@ -770,6 +770,7 @@ fn execute_pdf_extract(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_pdf_ocr_with_progress(
     input: &PathBuf,
     output: &PathBuf,
@@ -920,8 +921,8 @@ fn execute_pdf_ocr_with_progress(
 }
 
 fn execute_pdf_metadata(
-    input: &PathBuf,
-    output: Option<&PathBuf>,
+    input: &Path,
+    output: Option<&Path>,
     action: &MetadataAction,
     plan_only: bool,
 ) -> Result<String> {
@@ -938,7 +939,7 @@ fn execute_pdf_metadata(
     }
 }
 
-fn execute_pdf_metadata_get_all(input: &PathBuf, plan_only: bool) -> Result<String> {
+fn execute_pdf_metadata_get_all(input: &Path, plan_only: bool) -> Result<String> {
     if plan_only {
         return Ok(format!(
             "exiftool -json -PDF:all -XMP:all {}",
@@ -948,7 +949,7 @@ fn execute_pdf_metadata_get_all(input: &PathBuf, plan_only: bool) -> Result<Stri
 
     if !input.exists() {
         return Err(ForgeKitError::InvalidInput {
-            path: input.clone(),
+            path: input.to_path_buf(),
             reason: "Input file does not exist".to_string(),
         });
     }
@@ -964,14 +965,14 @@ fn execute_pdf_metadata_get_all(input: &PathBuf, plan_only: bool) -> Result<Stri
     Ok(json)
 }
 
-fn execute_pdf_metadata_get(input: &PathBuf, field: &str, plan_only: bool) -> Result<String> {
+fn execute_pdf_metadata_get(input: &Path, field: &str, plan_only: bool) -> Result<String> {
     if plan_only {
         return Ok(format!("exiftool -s -s -s -{} {}", field, input.display()));
     }
 
     if !input.exists() {
         return Err(ForgeKitError::InvalidInput {
-            path: input.clone(),
+            path: input.to_path_buf(),
             reason: "Input file does not exist".to_string(),
         });
     }
@@ -992,8 +993,8 @@ fn execute_pdf_metadata_get(input: &PathBuf, field: &str, plan_only: bool) -> Re
 }
 
 fn execute_pdf_metadata_set(
-    input: &PathBuf,
-    output: &PathBuf,
+    input: &Path,
+    output: &Path,
     fields: &[(String, String)],
     plan_only: bool,
 ) -> Result<String> {
@@ -1015,7 +1016,7 @@ fn execute_pdf_metadata_set(
 
     if !input.exists() {
         return Err(ForgeKitError::InvalidInput {
-            path: input.clone(),
+            path: input.to_path_buf(),
             reason: "Input file does not exist".to_string(),
         });
     }
