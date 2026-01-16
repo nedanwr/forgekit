@@ -152,10 +152,13 @@ impl PdfMetadataField {
             PdfMetadataField::Custom(name) => name.clone(),
         }
     }
+}
 
-    /// Parse a field name string into a PdfMetadataField
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
+impl std::str::FromStr for PdfMetadataField {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        Ok(match s.to_lowercase().as_str() {
             "title" => PdfMetadataField::Title,
             "author" => PdfMetadataField::Author,
             "subject" => PdfMetadataField::Subject,
@@ -165,7 +168,7 @@ impl PdfMetadataField {
             "creationdate" | "createdate" | "creation_date" => PdfMetadataField::CreationDate,
             "modifydate" | "moddate" | "modify_date" => PdfMetadataField::ModifyDate,
             _ => PdfMetadataField::Custom(s.to_string()),
-        }
+        })
     }
 }
 
@@ -236,7 +239,7 @@ impl ExiftoolTool {
         }
 
         for (field, value) in metadata {
-            let field_obj = PdfMetadataField::from_str(field);
+            let field_obj: PdfMetadataField = field.parse().unwrap();
             let tag = field_obj.to_exiftool_tag();
             cmd.arg(format!("-{}={}", tag, value));
         }
@@ -292,14 +295,14 @@ mod tests {
 
     #[test]
     fn test_pdf_metadata_field_parsing() {
-        assert_eq!(PdfMetadataField::from_str("title"), PdfMetadataField::Title);
-        assert_eq!(PdfMetadataField::from_str("Title"), PdfMetadataField::Title);
+        assert_eq!("title".parse::<PdfMetadataField>().unwrap(), PdfMetadataField::Title);
+        assert_eq!("Title".parse::<PdfMetadataField>().unwrap(), PdfMetadataField::Title);
         assert_eq!(
-            PdfMetadataField::from_str("author"),
+            "author".parse::<PdfMetadataField>().unwrap(),
             PdfMetadataField::Author
         );
         assert_eq!(
-            PdfMetadataField::from_str("CustomField"),
+            "CustomField".parse::<PdfMetadataField>().unwrap(),
             PdfMetadataField::Custom("CustomField".to_string())
         );
     }
