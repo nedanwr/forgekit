@@ -295,8 +295,14 @@ mod tests {
 
     #[test]
     fn test_pdf_metadata_field_parsing() {
-        assert_eq!("title".parse::<PdfMetadataField>().unwrap(), PdfMetadataField::Title);
-        assert_eq!("Title".parse::<PdfMetadataField>().unwrap(), PdfMetadataField::Title);
+        assert_eq!(
+            "title".parse::<PdfMetadataField>().unwrap(),
+            PdfMetadataField::Title
+        );
+        assert_eq!(
+            "Title".parse::<PdfMetadataField>().unwrap(),
+            PdfMetadataField::Title
+        );
         assert_eq!(
             "author".parse::<PdfMetadataField>().unwrap(),
             PdfMetadataField::Author
