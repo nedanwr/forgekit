@@ -1,8 +1,8 @@
 # ForgeKit Beta-MVP Roadmap (CLI-First)
 
-**Last Updated**: December 2025  
-**Status**: Core foundation complete, PDF merge/split/compress/extract implemented, dependency management complete  
-**Current Version**: v0.0.4
+**Last Updated**: January 2026  
+**Status**: Core foundation complete, PDF merge/split/compress/extract/ocr/metadata implemented, dependency management complete  
+**Current Version**: v0.0.5
 
 ## Versioning Strategy
 
@@ -76,20 +76,22 @@
 - ✅ Tests for new PDF operations
 - ✅ Integration with existing pages grammar parser
 
-#### v0.0.5 - PDF OCR and Metadata 📋
+#### v0.0.5 - PDF OCR and Metadata ✅
 
-**Status**: Pending
+**Status**: Completed
 
 **Deliverables**:
 
-- PDF OCR command (`pdf ocr`) with language selection
-- PDF metadata command (`pdf metadata`) with get/set operations
-- ocrmypdf tool adapter (Python wrapper handling)
-- exiftool adapter for metadata operations
-- OCR progress reporting (parse ocrmypdf output)
-- Metadata read/write operations
-- Tests for OCR and metadata operations
-- Error handling for OCR failures
+- ✅ PDF OCR command (`pdf ocr`) with language selection
+- ✅ PDF metadata command (`pdf metadata`) with get/set operations
+- ✅ ocrmypdf tool adapter (Python wrapper handling)
+- ✅ exiftool adapter for metadata operations
+- ✅ OCR progress reporting (basic progress events)
+- ✅ Metadata read/write operations (get all, get field, set fields)
+- ✅ Tests for OCR and metadata operations (9 new tests)
+- ✅ Error handling for OCR failures
+- ✅ OCR options: --skip-text, --deskew, --force-ocr
+- ✅ Integration with check-deps command
 
 #### v0.0.6 - Image Operations 📋
 
@@ -221,15 +223,14 @@
 - **Testing**: 20 tests passing (13 unit, 2 integration, 5 doc tests)
 - **Dependency Checking**: `check-deps` command implemented
 
-**Current Version**: v0.0.4 (completed)
+**Current Version**: v0.0.5 (completed)
 
 ### 🔄 In Progress
 
-- **v0.0.5**: PDF OCR and Metadata
+- **v0.0.6**: Image Operations
 
 ### 📋 Pending Features
 
-- PDF: OCR, metadata
 - Image: convert, resize, strip
 - Media: transcode, audio convert/normalize
 - Preset system (YAML) ✅
