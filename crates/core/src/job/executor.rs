@@ -187,6 +187,37 @@ pub fn execute_job_with_progress(
             scale,
             copy_audio,
         } => execute_video_transcode(input, output, *crf, preset, *scale, *copy_audio, plan_only),
+        JobSpec::VideoTrim {
+            input,
+            output,
+            start,
+            end,
+        } => execute_video_trim(input, output, *start, *end, plan_only),
+        JobSpec::VideoJoin { inputs, output } => execute_video_join(inputs, output, plan_only),
+        JobSpec::VideoThumbnail {
+            input,
+            output,
+            timestamp,
+        } => execute_video_thumbnail(input, output, *timestamp, plan_only),
+        JobSpec::VideoGif {
+            input,
+            output,
+            start,
+            duration,
+            width,
+            fps,
+        } => execute_video_gif(input, output, *start, *duration, *width, *fps, plan_only),
+        JobSpec::VideoSpeed {
+            input,
+            output,
+            speed,
+        } => execute_video_speed(input, output, *speed, plan_only),
+        JobSpec::VideoRotate {
+            input,
+            output,
+            degrees,
+        } => execute_video_rotate(input, output, *degrees, plan_only),
+        JobSpec::VideoMute { input, output } => execute_video_mute(input, output, plan_only),
     }
 }
 
@@ -1501,6 +1532,231 @@ fn execute_video_transcode(
         output.display(),
         crf,
         scale_str
+    ))
+}
+
+fn execute_video_trim(
+    input: &Path,
+    output: &Path,
+    start: Option<f64>,
+    end: Option<f64>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_trim(input, output, start, end));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_trim(&tool_info.path, input, output, start, end)?;
+
+    let time_str = match (start, end) {
+        (Some(s), Some(e)) => format!(" from {:.1}s to {:.1}s", s, e),
+        (Some(s), None) => format!(" from {:.1}s to end", s),
+        (None, Some(e)) => format!(" from start to {:.1}s", e),
+        (None, None) => String::new(),
+    };
+
+    Ok(format!(
+        "Successfully trimmed video{}",
+        time_str
+    ))
+}
+
+fn execute_video_join(
+    inputs: &[PathBuf],
+    output: &Path,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_join(inputs, output));
+    }
+
+    if inputs.len() < 2 {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: format!("At least 2 files required for join, got {}", inputs.len()),
+        });
+    }
+
+    for input in inputs {
+        if !input.exists() {
+            return Err(ForgeKitError::InvalidInput {
+                path: input.clone(),
+                reason: "Input file does not exist".to_string(),
+            });
+        }
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_join(&tool_info.path, inputs, output)?;
+
+    Ok(format!(
+        "Successfully joined {} videos into {}",
+        inputs.len(),
+        output.display()
+    ))
+}
+
+fn execute_video_thumbnail(
+    input: &Path,
+    output: &Path,
+    timestamp: f64,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_thumbnail(input, output, timestamp));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_thumbnail(&tool_info.path, input, output, timestamp)?;
+
+    Ok(format!(
+        "Successfully extracted thumbnail at {:.1}s to {}",
+        timestamp,
+        output.display()
+    ))
+}
+
+fn execute_video_gif(
+    input: &Path,
+    output: &Path,
+    start: Option<f64>,
+    duration: Option<f64>,
+    width: Option<u32>,
+    fps: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_gif(input, output, start, duration, width, fps));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_gif(&tool_info.path, input, output, start, duration, width, fps)?;
+
+    Ok(format!(
+        "Successfully created GIF: {}",
+        output.display()
+    ))
+}
+
+fn execute_video_speed(
+    input: &Path,
+    output: &Path,
+    speed: f64,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_speed(input, output, speed));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    if speed <= 0.0 {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Speed must be greater than 0".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_speed(&tool_info.path, input, output, speed)?;
+
+    Ok(format!(
+        "Successfully changed video speed to {:.1}x: {}",
+        speed,
+        output.display()
+    ))
+}
+
+fn execute_video_rotate(
+    input: &Path,
+    output: &Path,
+    degrees: u32,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_rotate(input, output, degrees));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    if degrees != 90 && degrees != 180 && degrees != 270 {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: format!("Invalid rotation angle {}. Use 90, 180, or 270.", degrees),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_rotate(&tool_info.path, input, output, degrees)?;
+
+    Ok(format!(
+        "Successfully rotated video {}°: {}",
+        degrees,
+        output.display()
+    ))
+}
+
+fn execute_video_mute(
+    input: &Path,
+    output: &Path,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_mute(input, output));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_mute(&tool_info.path, input, output)?;
+
+    Ok(format!(
+        "Successfully removed audio from video: {}",
+        output.display()
     ))
 }
 
