@@ -27,6 +27,7 @@ mod commands;
 
 use clap::{Parser, Subcommand};
 use commands::check::handle_check_deps;
+use commands::image::{handle_image_command, ImageCommand};
 use commands::pdf::{handle_pdf_command, PdfCommand};
 use forgekit_core::utils::error::{ExitCode, ForgeKitError};
 
@@ -58,6 +59,10 @@ enum Commands {
     #[command(subcommand)]
     Pdf(PdfCommand),
 
+    /// Image operations (convert, resize, strip metadata)
+    #[command(subcommand)]
+    Image(ImageCommand),
+
     /// Check if required dependencies are installed
     CheckDeps,
 }
@@ -69,6 +74,7 @@ fn main() {
 
     let result = match &cli.command {
         Some(Commands::Pdf(ref cmd)) => handle_pdf_command(cmd.clone(), plan_only, json_output),
+        Some(Commands::Image(ref cmd)) => handle_image_command(cmd.clone(), plan_only, json_output),
         Some(Commands::CheckDeps) => handle_check_deps(),
         None => {
             println!("ForgeKit - Local-first media and PDF toolkit");
