@@ -1,0 +1,13 @@
+# Test Files Directory
+
+This directory contains test files used for development and testing.
+
+## Structure
+
+- `pdf/` - PDF test files (scanned documents, multi-page PDFs, etc.)
+- `images/` - Image test files (JPG, PNG, DNG, etc.)
+- `output/` - Generated output files from tests (should be gitignored)
+
+## Usage
+
+Place test files here for local development and testing. These files are typically not committed to the repository.

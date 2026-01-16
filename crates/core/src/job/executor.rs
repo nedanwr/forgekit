@@ -28,10 +28,12 @@ use crate::job::JobSpec;
 use crate::presets::get_compression_strategy;
 use crate::tools::exiftool::ExiftoolTool;
 use crate::tools::gs::GsTool;
+use crate::tools::libvips::LibvipsTool;
 use crate::tools::ocrmypdf::OcrmypdfTool;
 use crate::tools::qpdf::QpdfTool;
-use crate::tools::{Tool, ToolConfig};
+use crate::tools::{Tool, ToolConfig, ToolInfo};
 use crate::utils::error::{ForgeKitError, Result};
+use crate::utils::image::ImageFormat;
 use crate::utils::pages::PageSpec;
 use crate::utils::temp::create_temp_file;
 use std::time::Instant;
@@ -118,6 +120,31 @@ pub fn execute_job_with_progress(
             output,
             action,
         } => execute_pdf_metadata(input, output.as_deref(), action, plan_only),
+
+        // Image operations
+        JobSpec::ImageConvert {
+            input,
+            output,
+            format,
+            quality,
+            compression,
+            strip_metadata,
+        } => execute_image_convert(
+            input,
+            output,
+            format,
+            *quality,
+            *compression,
+            *strip_metadata,
+            plan_only,
+        ),
+        JobSpec::ImageResize {
+            input,
+            output,
+            width,
+            height,
+        } => execute_image_resize(input, output, *width, *height, plan_only),
+        JobSpec::ImageStrip { input, output } => execute_image_strip(input, output, plan_only),
     }
 }
 
@@ -1041,6 +1068,125 @@ fn execute_pdf_metadata_set(
     ))
 }
 
+// ========== Image Operations ==========
+
+/// Probe for libvips tool.
+fn probe_libvips() -> Result<ToolInfo> {
+    let tool = LibvipsTool;
+    let config = ToolConfig::default();
+    tool.probe(&config)
+}
+
+fn execute_image_convert(
+    input: &Path,
+    output: &Path,
+    format: &ImageFormat,
+    quality: Option<u8>,
+    compression: Option<u8>,
+    strip: bool,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(LibvipsTool::plan_convert(
+            input,
+            output,
+            quality,
+            compression,
+            strip,
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_libvips()?;
+    let tool = LibvipsTool;
+    tool.convert(
+        &tool_info.path,
+        input,
+        output,
+        format,
+        quality,
+        compression,
+        strip,
+    )?;
+
+    Ok(format!(
+        "Successfully converted image to {} ({})",
+        output.display(),
+        format.extension()
+    ))
+}
+
+fn execute_image_resize(
+    input: &Path,
+    output: &Path,
+    width: Option<u32>,
+    height: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if width.is_none() && height.is_none() {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "Width or height required for resize".to_string(),
+        });
+    }
+
+    if plan_only {
+        return Ok(LibvipsTool::plan_resize(input, output, width, height));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_libvips()?;
+    let tool = LibvipsTool;
+    tool.resize(&tool_info.path, input, output, width, height)?;
+
+    let size_str = match (width, height) {
+        (Some(w), Some(h)) => format!("{}x{}", w, h),
+        (Some(w), None) => format!("width {}", w),
+        (None, Some(h)) => format!("height {}", h),
+        (None, None) => "?".to_string(),
+    };
+
+    Ok(format!(
+        "Successfully resized image to {} ({})",
+        output.display(),
+        size_str
+    ))
+}
+
+fn execute_image_strip(input: &Path, output: &Path, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(LibvipsTool::plan_strip(input, output));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_libvips()?;
+    let tool = LibvipsTool;
+    tool.strip_metadata(&tool_info.path, input, output)?;
+
+    Ok(format!(
+        "Successfully stripped metadata from image: {}",
+        output.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1323,5 +1469,189 @@ mod metadata_tests {
             }
             _ => panic!("Expected InvalidInput error"),
         }
+    }
+}
+
+#[cfg(test)]
+mod image_operation_tests {
+    use super::*;
+    use crate::utils::image::ImageFormat;
+
+    #[test]
+    fn test_execute_image_convert_plan() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("photo.webp");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::WebP,
+            Some(80),
+            None,
+            true,
+            true,
+        )
+        .unwrap();
+
+        // Plan uses libvips format
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.jpg"));
+        assert!(result.contains("Q=80"));
+        assert!(result.contains("strip"));
+    }
+
+    #[test]
+    fn test_execute_image_convert_plan_no_strip() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("photo.png");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::Png,
+            None,
+            Some(0),
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.png"));
+        assert!(!result.contains("Q="));
+        assert!(result.contains("compression=0"));
+        assert!(!result.contains("strip"));
+    }
+
+    #[test]
+    fn test_execute_image_resize_plan() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("thumb.jpg");
+
+        let result = execute_image_resize(&input, &output, Some(800), Some(600), true).unwrap();
+
+        assert!(result.contains("vipsthumbnail"));
+        assert!(result.contains("-s 800x600"));
+    }
+
+    #[test]
+    fn test_execute_image_resize_plan_width_only() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("thumb.jpg");
+
+        let result = execute_image_resize(&input, &output, Some(800), None, true).unwrap();
+
+        assert!(result.contains("vipsthumbnail"));
+        assert!(result.contains("-s 800x"));
+    }
+
+    #[test]
+    fn test_execute_image_resize_plan_height_only() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("thumb.jpg");
+
+        let result = execute_image_resize(&input, &output, None, Some(600), true).unwrap();
+
+        assert!(result.contains("vipsthumbnail"));
+        assert!(result.contains("-s x600"));
+    }
+
+    #[test]
+    fn test_execute_image_resize_requires_dimensions() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("thumb.jpg");
+
+        let result = execute_image_resize(&input, &output, None, None, true);
+
+        assert!(result.is_err());
+        match result {
+            Err(ForgeKitError::InvalidInput { reason, .. }) => {
+                assert!(reason.contains("Width or height required"));
+            }
+            _ => panic!("Expected InvalidInput error"),
+        }
+    }
+
+    #[test]
+    fn test_execute_image_strip_plan() {
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("clean.jpg");
+
+        let result = execute_image_strip(&input, &output, true).unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.jpg"));
+        assert!(result.contains("[strip]"));
+    }
+
+    // Compress tests (compress uses ImageConvert with specific settings)
+
+    #[test]
+    fn test_execute_image_compress_jpeg_plan() {
+        // JPEG compress: quality reduction + strip metadata
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("photo_compressed.jpg");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::Jpeg,
+            Some(80), // quality 80
+            None,     // no PNG compression
+            true,     // strip metadata
+            true,     // plan only
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.jpg"));
+        assert!(result.contains("Q=80"));
+        assert!(result.contains("strip"));
+    }
+
+    #[test]
+    fn test_execute_image_compress_png_plan() {
+        // PNG compress: max compression level + strip metadata
+        let input = PathBuf::from("image.png");
+        let output = PathBuf::from("image_compressed.png");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::Png,
+            None,    // no quality for PNG
+            Some(9), // max compression
+            true,    // strip metadata
+            true,    // plan only
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("image.png"));
+        assert!(result.contains("compression=9"));
+        assert!(result.contains("strip"));
+    }
+
+    #[test]
+    fn test_execute_image_compress_webp_plan() {
+        // WebP compress: quality reduction + strip metadata
+        let input = PathBuf::from("photo.webp");
+        let output = PathBuf::from("photo_compressed.webp");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::WebP,
+            Some(60), // lower quality for more compression
+            None,
+            true, // strip metadata
+            true, // plan only
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.webp"));
+        assert!(result.contains("Q=60"));
+        assert!(result.contains("strip"));
     }
 }
