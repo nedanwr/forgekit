@@ -573,8 +573,8 @@ fn handle_info(args: &InfoArgs, json_output: bool) -> Result<()> {
             let stdout = String::from_utf8_lossy(&output.stdout);
             let lines: Vec<&str> = stdout.trim().lines().collect();
 
-            // Parse stream info (first line): channels,sample_rate
-            let (channels, sample_rate) = if let Some(line) = lines.first() {
+            // Parse stream info (first line): sample_rate,channels
+            let (sample_rate, channels) = if let Some(line) = lines.first() {
                 let parts: Vec<&str> = line.split(',').collect();
                 (
                     parts.first().unwrap_or(&"?").to_string(),
@@ -584,21 +584,21 @@ fn handle_info(args: &InfoArgs, json_output: bool) -> Result<()> {
                 ("?".to_string(), "?".to_string())
             };
 
-            // Parse format info (second line): duration,format_name,bit_rate
-            let (duration, format, bitrate) = if let Some(line) = lines.get(1) {
+            // Parse format info (second line): format_name,duration,bit_rate
+            let (format, duration, bitrate) = if let Some(line) = lines.get(1) {
                 let parts: Vec<&str> = line.split(',').collect();
+                let fmt = parts.first().unwrap_or(&"?").to_string();
                 let dur = parts
-                    .first()
+                    .get(1)
                     .and_then(|s| s.parse::<f64>().ok())
                     .map(format_duration)
                     .unwrap_or_else(|| "?".to_string());
-                let fmt = parts.get(1).unwrap_or(&"?").to_string();
                 let br = parts
                     .get(2)
                     .and_then(|s| s.parse::<u64>().ok())
                     .map(|b| format!("{} kbps", b / 1000))
                     .unwrap_or_else(|| "?".to_string());
-                (dur, fmt, br)
+                (fmt, dur, br)
             } else {
                 ("?".to_string(), "?".to_string(), "?".to_string())
             };
