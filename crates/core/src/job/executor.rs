@@ -27,11 +27,13 @@ use crate::job::spec::MetadataAction;
 use crate::job::JobSpec;
 use crate::presets::get_compression_strategy;
 use crate::tools::exiftool::ExiftoolTool;
+use crate::tools::ffmpeg::FfmpegTool;
 use crate::tools::gs::GsTool;
 use crate::tools::libvips::LibvipsTool;
 use crate::tools::ocrmypdf::OcrmypdfTool;
 use crate::tools::qpdf::QpdfTool;
 use crate::tools::{Tool, ToolConfig, ToolInfo};
+use crate::utils::audio::{AudioFormat, LoudnessTarget};
 use crate::utils::error::{ForgeKitError, Result};
 use crate::utils::image::ImageFormat;
 use crate::utils::pages::PageSpec;
@@ -145,6 +147,38 @@ pub fn execute_job_with_progress(
             height,
         } => execute_image_resize(input, output, *width, *height, plan_only),
         JobSpec::ImageStrip { input, output } => execute_image_strip(input, output, plan_only),
+
+        // Audio operations
+        JobSpec::AudioConvert {
+            input,
+            output,
+            format,
+            bitrate,
+        } => execute_audio_convert(input, output, format, *bitrate, plan_only),
+        JobSpec::AudioNormalize {
+            input,
+            output,
+            target,
+        } => execute_audio_normalize(input, output, target, plan_only),
+        JobSpec::AudioExtract {
+            input,
+            output,
+            format,
+            bitrate,
+        } => execute_audio_extract(input, output, format, *bitrate, plan_only),
+        JobSpec::AudioTrim {
+            input,
+            output,
+            start,
+            end,
+        } => execute_audio_trim(input, output, *start, *end, plan_only),
+        JobSpec::AudioJoin { inputs, output } => execute_audio_join(inputs, output, plan_only),
+        JobSpec::AudioVolume {
+            input,
+            output,
+            gain_db,
+        } => execute_audio_volume(input, output, *gain_db, plan_only),
+        JobSpec::AudioMono { input, output } => execute_audio_mono(input, output, plan_only),
     }
 }
 
@@ -1187,6 +1221,235 @@ fn execute_image_strip(input: &Path, output: &Path, plan_only: bool) -> Result<S
     ))
 }
 
+// ========== Audio Operations ==========
+
+fn probe_ffmpeg() -> Result<ToolInfo> {
+    let tool = FfmpegTool;
+    let config = ToolConfig::default();
+    tool.probe(&config)
+}
+
+fn execute_audio_convert(
+    input: &Path,
+    output: &Path,
+    format: &AudioFormat,
+    bitrate: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_convert(input, output, format, bitrate));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.convert(&tool_info.path, input, output, format, bitrate)?;
+
+    let bitrate_str = bitrate
+        .map(|b| format!(" at {}kbps", b))
+        .unwrap_or_default();
+
+    Ok(format!(
+        "Successfully converted audio to {} ({}){}",
+        output.display(),
+        format.extension(),
+        bitrate_str
+    ))
+}
+
+fn execute_audio_normalize(
+    input: &Path,
+    output: &Path,
+    target: &LoudnessTarget,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_normalize(input, output, target));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.normalize(&tool_info.path, input, output, target)?;
+
+    Ok(format!(
+        "Successfully normalized audio to {} ({})",
+        output.display(),
+        target
+    ))
+}
+
+fn execute_audio_extract(
+    input: &Path,
+    output: &Path,
+    format: &AudioFormat,
+    bitrate: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_extract(input, output, format, bitrate));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.extract(&tool_info.path, input, output, format, bitrate)?;
+
+    let bitrate_str = bitrate
+        .map(|b| format!(" at {}kbps", b))
+        .unwrap_or_default();
+
+    Ok(format!(
+        "Successfully extracted audio to {} ({}){}",
+        output.display(),
+        format.extension(),
+        bitrate_str
+    ))
+}
+
+fn execute_audio_trim(
+    input: &Path,
+    output: &Path,
+    start: Option<f64>,
+    end: Option<f64>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_trim(input, output, start, end));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.trim(&tool_info.path, input, output, start, end)?;
+
+    let time_str = match (start, end) {
+        (Some(s), Some(e)) => format!(" from {:.1}s to {:.1}s", s, e),
+        (Some(s), None) => format!(" from {:.1}s", s),
+        (None, Some(e)) => format!(" to {:.1}s", e),
+        (None, None) => String::new(),
+    };
+
+    Ok(format!(
+        "Successfully trimmed audio to {}{}",
+        output.display(),
+        time_str
+    ))
+}
+
+fn execute_audio_join(inputs: &[PathBuf], output: &Path, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_join(inputs, output));
+    }
+
+    // Validate inputs
+    for input in inputs {
+        if !input.exists() {
+            return Err(ForgeKitError::InvalidInput {
+                path: input.clone(),
+                reason: "Input file does not exist".to_string(),
+            });
+        }
+    }
+
+    if inputs.len() < 2 {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "At least 2 input files are required for join".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.join(&tool_info.path, inputs, output)?;
+
+    Ok(format!(
+        "Successfully joined {} audio files to {}",
+        inputs.len(),
+        output.display()
+    ))
+}
+
+fn execute_audio_volume(
+    input: &Path,
+    output: &Path,
+    gain_db: f64,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_volume(input, output, gain_db));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.volume(&tool_info.path, input, output, gain_db)?;
+
+    let gain_str = if gain_db >= 0.0 {
+        format!("+{:.1}dB", gain_db)
+    } else {
+        format!("{:.1}dB", gain_db)
+    };
+
+    Ok(format!(
+        "Successfully adjusted volume by {} to {}",
+        gain_str,
+        output.display()
+    ))
+}
+
+fn execute_audio_mono(input: &Path, output: &Path, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_mono(input, output));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.mono(&tool_info.path, input, output)?;
+
+    Ok(format!(
+        "Successfully converted to mono: {}",
+        output.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1653,5 +1916,236 @@ mod image_operation_tests {
         assert!(result.contains("photo.webp"));
         assert!(result.contains("Q=60"));
         assert!(result.contains("strip"));
+    }
+}
+
+#[cfg(test)]
+mod audio_operation_tests {
+    use super::*;
+    use crate::utils::audio::{AudioFormat, LoudnessTarget};
+
+    #[test]
+    fn test_execute_audio_convert_mp3_plan() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio.mp3");
+
+        let result =
+            execute_audio_convert(&input, &output, &AudioFormat::Mp3, Some(192), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-i audio.wav"));
+        assert!(result.contains("-c:a libmp3lame"));
+        assert!(result.contains("-b:a 192k"));
+        assert!(result.contains("audio.mp3"));
+    }
+
+    #[test]
+    fn test_execute_audio_convert_opus_plan() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio.opus");
+
+        let result =
+            execute_audio_convert(&input, &output, &AudioFormat::Opus, Some(128), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-c:a libopus"));
+        assert!(result.contains("-b:a 128k"));
+        assert!(result.contains("-f opus"));
+    }
+
+    #[test]
+    fn test_execute_audio_convert_flac_no_bitrate() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio.flac");
+
+        // FLAC doesn't support bitrate, so it shouldn't be in the plan
+        let result =
+            execute_audio_convert(&input, &output, &AudioFormat::Flac, Some(320), true).unwrap();
+
+        assert!(result.contains("-c:a flac"));
+        assert!(!result.contains("-b:a"));
+    }
+
+    #[test]
+    fn test_execute_audio_convert_aac_plan() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio.m4a");
+
+        let result =
+            execute_audio_convert(&input, &output, &AudioFormat::M4a, Some(256), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-c:a aac"));
+        assert!(result.contains("-b:a 256k"));
+    }
+
+    #[test]
+    fn test_execute_audio_normalize_ebu_r128_plan() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio_normalized.wav");
+
+        let result =
+            execute_audio_normalize(&input, &output, &LoudnessTarget::EbuR128, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-af"));
+        assert!(result.contains("loudnorm"));
+        assert!(result.contains("I=-23"));
+        assert!(result.contains("TP=-1"));
+    }
+
+    #[test]
+    fn test_execute_audio_normalize_streaming_plan() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio_normalized.wav");
+
+        let result =
+            execute_audio_normalize(&input, &output, &LoudnessTarget::Streaming, true).unwrap();
+
+        assert!(result.contains("I=-14"));
+    }
+
+    #[test]
+    fn test_execute_audio_normalize_custom_plan() {
+        let input = PathBuf::from("audio.wav");
+        let output = PathBuf::from("audio_normalized.wav");
+
+        let result =
+            execute_audio_normalize(&input, &output, &LoudnessTarget::Custom(-16.0), true).unwrap();
+
+        assert!(result.contains("I=-16"));
+    }
+
+    #[test]
+    fn test_execute_audio_extract_mp3_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("audio.mp3");
+
+        let result =
+            execute_audio_extract(&input, &output, &AudioFormat::Mp3, Some(192), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-i video.mp4"));
+        assert!(result.contains("-vn")); // Strip video
+        assert!(result.contains("-c:a libmp3lame"));
+        assert!(result.contains("-b:a 192k"));
+        assert!(result.contains("audio.mp3"));
+    }
+
+    #[test]
+    fn test_execute_audio_extract_opus_plan() {
+        let input = PathBuf::from("video.mkv");
+        let output = PathBuf::from("audio.opus");
+
+        let result =
+            execute_audio_extract(&input, &output, &AudioFormat::Opus, Some(128), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-vn"));
+        assert!(result.contains("-c:a libopus"));
+        assert!(result.contains("-b:a 128k"));
+        assert!(result.contains("-f opus"));
+    }
+
+    #[test]
+    fn test_execute_audio_extract_flac_no_bitrate() {
+        let input = PathBuf::from("video.mov");
+        let output = PathBuf::from("audio.flac");
+
+        // FLAC doesn't support bitrate
+        let result =
+            execute_audio_extract(&input, &output, &AudioFormat::Flac, Some(320), true).unwrap();
+
+        assert!(result.contains("-vn"));
+        assert!(result.contains("-c:a flac"));
+        assert!(!result.contains("-b:a"));
+    }
+
+    #[test]
+    fn test_execute_audio_trim_plan() {
+        let input = PathBuf::from("song.mp3");
+        let output = PathBuf::from("clip.mp3");
+
+        let result = execute_audio_trim(&input, &output, Some(30.0), Some(120.0), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-ss 30"));
+        assert!(result.contains("-t 90")); // duration = 120 - 30
+        assert!(result.contains("-c copy"));
+    }
+
+    #[test]
+    fn test_execute_audio_trim_start_only_plan() {
+        let input = PathBuf::from("song.mp3");
+        let output = PathBuf::from("clip.mp3");
+
+        let result = execute_audio_trim(&input, &output, Some(60.0), None, true).unwrap();
+
+        assert!(result.contains("-ss 60"));
+        assert!(!result.contains("-t "));
+        assert!(!result.contains("-to "));
+    }
+
+    #[test]
+    fn test_execute_audio_trim_end_only_plan() {
+        let input = PathBuf::from("song.mp3");
+        let output = PathBuf::from("clip.mp3");
+
+        let result = execute_audio_trim(&input, &output, None, Some(90.0), true).unwrap();
+
+        assert!(!result.contains("-ss"));
+        assert!(result.contains("-to 90"));
+    }
+
+    #[test]
+    fn test_execute_audio_join_plan() {
+        let inputs = vec![
+            PathBuf::from("part1.mp3"),
+            PathBuf::from("part2.mp3"),
+            PathBuf::from("part3.mp3"),
+        ];
+        let output = PathBuf::from("joined.mp3");
+
+        let result = execute_audio_join(&inputs, &output, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-f concat"));
+        assert!(result.contains("-c copy"));
+        assert!(result.contains("part1.mp3"));
+        assert!(result.contains("part2.mp3"));
+        assert!(result.contains("part3.mp3"));
+    }
+
+    #[test]
+    fn test_execute_audio_volume_positive_plan() {
+        let input = PathBuf::from("quiet.wav");
+        let output = PathBuf::from("louder.wav");
+
+        let result = execute_audio_volume(&input, &output, 6.0, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-af"));
+        assert!(result.contains("volume=6dB"));
+    }
+
+    #[test]
+    fn test_execute_audio_volume_negative_plan() {
+        let input = PathBuf::from("loud.wav");
+        let output = PathBuf::from("quieter.wav");
+
+        let result = execute_audio_volume(&input, &output, -3.0, true).unwrap();
+
+        assert!(result.contains("volume=-3dB"));
+    }
+
+    #[test]
+    fn test_execute_audio_mono_plan() {
+        let input = PathBuf::from("stereo.wav");
+        let output = PathBuf::from("mono.wav");
+
+        let result = execute_audio_mono(&input, &output, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-ac 1"));
     }
 }

@@ -124,17 +124,18 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "forgekit"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "clap",
  "forgekit-core",
+ "glob",
  "serde_json",
 ]
 
 [[package]]
 name = "forgekit-core"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "serde",
@@ -155,6 +156,12 @@ dependencies = [
  "r-efi",
  "wasip2",
 ]
+
+[[package]]
+name = "glob"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "hashbrown"

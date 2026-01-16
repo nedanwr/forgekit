@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod error;
 pub mod image;
 pub mod pages;

@@ -1,4 +1,5 @@
 use forgekit_core::tools::exiftool::ExiftoolTool;
+use forgekit_core::tools::ffmpeg::FfmpegTool;
 use forgekit_core::tools::gs::GsTool;
 use forgekit_core::tools::libvips::LibvipsTool;
 use forgekit_core::tools::ocrmypdf::OcrmypdfTool;
@@ -25,6 +26,7 @@ pub fn handle_check_deps() -> Result<()> {
         ("ocrmypdf", Box::new(OcrmypdfTool)),
         ("exiftool", Box::new(ExiftoolTool)),
         ("vips", Box::new(LibvipsTool)),
+        ("ffmpeg", Box::new(FfmpegTool)),
     ];
 
     let mut all_ok = true;
