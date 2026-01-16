@@ -26,6 +26,7 @@
 mod commands;
 
 use clap::{Parser, Subcommand};
+use commands::audio::{handle_audio_command, AudioCommand};
 use commands::check::handle_check_deps;
 use commands::image::{handle_image_command, ImageCommand};
 use commands::pdf::{handle_pdf_command, PdfCommand};
@@ -63,6 +64,10 @@ enum Commands {
     #[command(subcommand)]
     Image(ImageCommand),
 
+    /// Audio operations (convert, normalize)
+    #[command(subcommand)]
+    Audio(AudioCommand),
+
     /// Check if required dependencies are installed
     CheckDeps,
 }
@@ -75,6 +80,7 @@ fn main() {
     let result = match &cli.command {
         Some(Commands::Pdf(ref cmd)) => handle_pdf_command(cmd.clone(), plan_only, json_output),
         Some(Commands::Image(ref cmd)) => handle_image_command(cmd.clone(), plan_only, json_output),
+        Some(Commands::Audio(ref cmd)) => handle_audio_command(cmd, plan_only, json_output),
         Some(Commands::CheckDeps) => handle_check_deps(),
         None => {
             println!("ForgeKit - Local-first media and PDF toolkit");
