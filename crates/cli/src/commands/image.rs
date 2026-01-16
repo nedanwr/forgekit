@@ -48,7 +48,7 @@ pub struct ConvertArgs {
     pub output: Option<PathBuf>,
 
     /// Target format (required if --output not specified)
-    #[arg(long, help = "Target format: jpeg, png, webp, avif, tiff, gif")]
+    #[arg(short = 't', long, help = "Target format: jpeg, png, webp, avif, tiff, gif")]
     pub to: Option<String>,
 
     /// Quality (0-100). Applies to JPEG, WebP, and AVIF formats
@@ -70,9 +70,9 @@ pub struct ResizeArgs {
     #[arg(required = true, help = "Input image file")]
     pub input: PathBuf,
 
-    /// Output image file
-    #[arg(short, long, required = true, help = "Output image file")]
-    pub output: PathBuf,
+    /// Output image file (defaults to input_WIDTHxHEIGHT.ext in current dir)
+    #[arg(short, long, help = "Output image file")]
+    pub output: Option<PathBuf>,
 
     /// Target width (preserves aspect ratio if height not specified)
     #[arg(short, long, help = "Target width in pixels")]
@@ -89,9 +89,9 @@ pub struct StripArgs {
     #[arg(required = true, help = "Input image file")]
     pub input: PathBuf,
 
-    /// Output image file
-    #[arg(short, long, required = true, help = "Output image file")]
-    pub output: PathBuf,
+    /// Output image file (defaults to input_stripped.ext in current dir)
+    #[arg(short, long, help = "Output image file")]
+    pub output: Option<PathBuf>,
 }
 
 pub fn handle_image_command(cmd: ImageCommand, plan_only: bool, json_output: bool) -> Result<()> {
@@ -197,9 +197,30 @@ fn handle_resize(args: ResizeArgs, plan_only: bool, json_output: bool) -> Result
         });
     }
 
+    // Derive output path if not provided
+    let output = if let Some(output) = args.output {
+        output
+    } else {
+        let stem = args.input.file_stem().ok_or_else(|| {
+            forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                path: args.input.clone(),
+                reason: "Cannot determine filename from input".to_string(),
+            }
+        })?;
+        let ext = args.input.extension().unwrap_or_default();
+        let suffix = match (args.width, args.height) {
+            (Some(w), Some(h)) => format!("_{}x{}", w, h),
+            (Some(w), None) => format!("_{}w", w),
+            (None, Some(h)) => format!("_{}h", h),
+            (None, None) => unreachable!(),
+        };
+        let new_name = format!("{}{}.{}", stem.to_string_lossy(), suffix, ext.to_string_lossy());
+        PathBuf::from(new_name)
+    };
+
     let spec = JobSpec::ImageResize {
         input: args.input,
-        output: args.output,
+        output,
         width: args.width,
         height: args.height,
     };
@@ -208,9 +229,24 @@ fn handle_resize(args: ResizeArgs, plan_only: bool, json_output: bool) -> Result
 }
 
 fn handle_strip(args: StripArgs, plan_only: bool, json_output: bool) -> Result<()> {
+    // Derive output path if not provided
+    let output = if let Some(output) = args.output {
+        output
+    } else {
+        let stem = args.input.file_stem().ok_or_else(|| {
+            forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                path: args.input.clone(),
+                reason: "Cannot determine filename from input".to_string(),
+            }
+        })?;
+        let ext = args.input.extension().unwrap_or_default();
+        let new_name = format!("{}_stripped.{}", stem.to_string_lossy(), ext.to_string_lossy());
+        PathBuf::from(new_name)
+    };
+
     let spec = JobSpec::ImageStrip {
         input: args.input,
-        output: args.output,
+        output,
     };
 
     execute_image_job(&spec, plan_only, json_output)
