@@ -29,8 +29,8 @@ use clap::{Parser, Subcommand};
 use commands::audio::{handle_audio_command, AudioCommand};
 use commands::check::handle_check_deps;
 use commands::image::{handle_image_command, ImageCommand};
-use commands::media::{handle_media_command, MediaCommand};
 use commands::pdf::{handle_pdf_command, PdfCommand};
+use commands::video::{handle_video_command, VideoCommand};
 use forgekit_core::utils::error::{ExitCode, ForgeKitError};
 
 /// Main CLI structure.
@@ -69,9 +69,9 @@ enum Commands {
     #[command(subcommand)]
     Audio(AudioCommand),
 
-    /// Media/video operations (transcode)
+    /// Video operations (transcode, trim, join, thumbnail, gif, etc.)
     #[command(subcommand)]
-    Media(MediaCommand),
+    Video(VideoCommand),
 
     /// Check if required dependencies are installed
     CheckDeps,
@@ -86,7 +86,7 @@ fn main() {
         Some(Commands::Pdf(ref cmd)) => handle_pdf_command(cmd.clone(), plan_only, json_output),
         Some(Commands::Image(ref cmd)) => handle_image_command(cmd.clone(), plan_only, json_output),
         Some(Commands::Audio(ref cmd)) => handle_audio_command(cmd, plan_only, json_output),
-        Some(Commands::Media(ref cmd)) => handle_media_command(cmd, plan_only, json_output),
+        Some(Commands::Video(ref cmd)) => handle_video_command(cmd, plan_only, json_output),
         Some(Commands::CheckDeps) => handle_check_deps(),
         None => {
             println!("ForgeKit - Local-first media and PDF toolkit");
