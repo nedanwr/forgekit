@@ -129,7 +129,15 @@ pub fn execute_job_with_progress(
             quality,
             compression,
             strip_metadata,
-        } => execute_image_convert(input, output, format, *quality, *compression, *strip_metadata, plan_only),
+        } => execute_image_convert(
+            input,
+            output,
+            format,
+            *quality,
+            *compression,
+            *strip_metadata,
+            plan_only,
+        ),
         JobSpec::ImageResize {
             input,
             output,
@@ -1079,7 +1087,13 @@ fn execute_image_convert(
     plan_only: bool,
 ) -> Result<String> {
     if plan_only {
-        return Ok(LibvipsTool::plan_convert(input, output, quality, compression, strip));
+        return Ok(LibvipsTool::plan_convert(
+            input,
+            output,
+            quality,
+            compression,
+            strip,
+        ));
     }
 
     if !input.exists() {
@@ -1091,7 +1105,15 @@ fn execute_image_convert(
 
     let tool_info = probe_libvips()?;
     let tool = LibvipsTool;
-    tool.convert(&tool_info.path, input, output, format, quality, compression, strip)?;
+    tool.convert(
+        &tool_info.path,
+        input,
+        output,
+        format,
+        quality,
+        compression,
+        strip,
+    )?;
 
     Ok(format!(
         "Successfully converted image to {} ({})",
@@ -1460,9 +1482,16 @@ mod image_operation_tests {
         let input = PathBuf::from("photo.jpg");
         let output = PathBuf::from("photo.webp");
 
-        let result =
-            execute_image_convert(&input, &output, &ImageFormat::WebP, Some(80), None, true, true)
-                .unwrap();
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::WebP,
+            Some(80),
+            None,
+            true,
+            true,
+        )
+        .unwrap();
 
         // Plan uses libvips format
         assert!(result.contains("vips copy"));
@@ -1476,9 +1505,16 @@ mod image_operation_tests {
         let input = PathBuf::from("photo.jpg");
         let output = PathBuf::from("photo.png");
 
-        let result =
-            execute_image_convert(&input, &output, &ImageFormat::Png, None, Some(0), false, true)
-                .unwrap();
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::Png,
+            None,
+            Some(0),
+            false,
+            true,
+        )
+        .unwrap();
 
         assert!(result.contains("vips copy"));
         assert!(result.contains("photo.png"));
@@ -1546,5 +1582,76 @@ mod image_operation_tests {
         assert!(result.contains("vips copy"));
         assert!(result.contains("photo.jpg"));
         assert!(result.contains("[strip]"));
+    }
+
+    // Compress tests (compress uses ImageConvert with specific settings)
+
+    #[test]
+    fn test_execute_image_compress_jpeg_plan() {
+        // JPEG compress: quality reduction + strip metadata
+        let input = PathBuf::from("photo.jpg");
+        let output = PathBuf::from("photo_compressed.jpg");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::Jpeg,
+            Some(80), // quality 80
+            None,     // no PNG compression
+            true,     // strip metadata
+            true,     // plan only
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.jpg"));
+        assert!(result.contains("Q=80"));
+        assert!(result.contains("strip"));
+    }
+
+    #[test]
+    fn test_execute_image_compress_png_plan() {
+        // PNG compress: max compression level + strip metadata
+        let input = PathBuf::from("image.png");
+        let output = PathBuf::from("image_compressed.png");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::Png,
+            None,    // no quality for PNG
+            Some(9), // max compression
+            true,    // strip metadata
+            true,    // plan only
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("image.png"));
+        assert!(result.contains("compression=9"));
+        assert!(result.contains("strip"));
+    }
+
+    #[test]
+    fn test_execute_image_compress_webp_plan() {
+        // WebP compress: quality reduction + strip metadata
+        let input = PathBuf::from("photo.webp");
+        let output = PathBuf::from("photo_compressed.webp");
+
+        let result = execute_image_convert(
+            &input,
+            &output,
+            &ImageFormat::WebP,
+            Some(60), // lower quality for more compression
+            None,
+            true, // strip metadata
+            true, // plan only
+        )
+        .unwrap();
+
+        assert!(result.contains("vips copy"));
+        assert!(result.contains("photo.webp"));
+        assert!(result.contains("Q=60"));
+        assert!(result.contains("strip"));
     }
 }
