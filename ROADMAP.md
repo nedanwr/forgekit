@@ -1,8 +1,8 @@
 # ForgeKit Beta-MVP Roadmap (CLI-First)
 
 **Last Updated**: January 2026
-**Status**: Core foundation complete, PDF operations complete, Image operations complete
-**Current Version**: v0.0.6
+**Status**: Core foundation complete, PDF operations complete, Image operations complete, Audio operations complete
+**Current Version**: v0.0.7
 
 ## Versioning Strategy
 
@@ -109,19 +109,19 @@
 - ✅ PNG compression control (1-9) for conversion
 - ✅ RAW format input support (DNG, CR2, NEF, etc.)
 
-#### v0.0.7 - Audio Operations 📋
+#### v0.0.7 - Audio Operations ✅
 
-**Status**: Pending
+**Status**: Completed
 
 **Deliverables**:
 
-- Audio convert command (`audio convert`) with format/bitrate selection
-- Audio normalize command (`audio normalize`) with EBU R128 support
-- ffmpeg audio adapter (codec selection, bitrate control)
-- Audio presets (Opus 128k, AAC 192k, EBU R128 normalization)
-- Loudness normalization support (I=-16 LUFS target)
-- Tests for audio operations (duration, bitrate, format)
-- Progress reporting for audio processing
+- ✅ Audio convert command (`audio convert`) with format/bitrate selection
+- ✅ Audio normalize command (`audio normalize`) with EBU R128 support
+- ✅ Audio info command (`audio info`) for file information
+- ✅ ffmpeg audio adapter (codec selection, bitrate control)
+- ✅ Loudness normalization support (EBU R128, Streaming, custom LUFS)
+- ✅ Supported formats: MP3, AAC, Opus, FLAC, WAV, OGG, M4A
+- ✅ Tests for audio operations (12 new tests)
 
 #### v0.0.8 - Video Operations 📋
 
@@ -218,21 +218,21 @@
 - **Core Foundation**: Tool trait system, error handling, job specs
 - **PDF Operations**: Merge, split, compress, linearize, reorder, extract, OCR, metadata
 - **Image Operations**: Convert, resize, strip, compress, info (via libvips)
+- **Audio Operations**: Convert, normalize, info (via ffmpeg)
 - **Pages Grammar**: Full parser with comprehensive tests (11 tests)
 - **Progress Reporting**: NDJSON output with versioned schema
 - **CLI Flags**: `--json`, `--plan`, `--dry-run` working
 - **Documentation**: Comprehensive inline docs, README, CONTRIBUTING guide
 - **Dependency Checking**: `check-deps` command implemented
 
-**Current Version**: v0.0.6 (completed)
+**Current Version**: v0.0.7 (completed)
 
 ### 🔄 In Progress
 
-- **v0.0.7**: Audio Operations
+- **v0.0.8**: Video Operations
 
 ### 📋 Pending Features
 
-- Audio: convert, normalize
 - Media: transcode
 - Preset system (YAML) ✅
 - Package creation (deb, rpm, Homebrew, winget)
