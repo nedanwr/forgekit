@@ -42,6 +42,7 @@ desktop.ini
 *.tmp
 *.temp
 
-
-# PDF files
-*.pdf
+# Test files (but keep directory structure with .gitkeep)
+test-files/**/*
+!test-files/**/.gitkeep
+test-files/output/
