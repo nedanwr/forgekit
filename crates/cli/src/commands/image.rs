@@ -45,6 +45,15 @@ pub enum ImageCommand {
     /// For JPEG/WebP/AVIF: reduces quality (default 80) + strips metadata.
     /// For PNG: uses max compression (level 9) + strips metadata.
     Compress(CompressArgs),
+
+    /// Show image information (dimensions, format, file size)
+    ///
+    /// Examples:
+    ///   forgekit image info photo.jpg
+    ///   forgekit image info photo.jpg --exif
+    ///
+    /// Shows basic image properties. Use --exif for camera/EXIF metadata.
+    Info(InfoArgs),
 }
 
 #[derive(Args, Clone)]
@@ -119,12 +128,24 @@ pub struct CompressArgs {
     pub quality: u8,
 }
 
+#[derive(Args, Clone)]
+pub struct InfoArgs {
+    /// Input image file
+    #[arg(required = true, help = "Input image file")]
+    pub input: PathBuf,
+
+    /// Show EXIF/camera metadata
+    #[arg(long, help = "Show EXIF/camera metadata")]
+    pub exif: bool,
+}
+
 pub fn handle_image_command(cmd: ImageCommand, plan_only: bool, json_output: bool) -> Result<()> {
     match cmd {
         ImageCommand::Convert(args) => handle_convert(args, plan_only, json_output),
         ImageCommand::Resize(args) => handle_resize(args, plan_only, json_output),
         ImageCommand::Strip(args) => handle_strip(args, plan_only, json_output),
         ImageCommand::Compress(args) => handle_compress(args, plan_only, json_output),
+        ImageCommand::Info(args) => handle_info(args, json_output),
     }
 }
 
@@ -344,6 +365,128 @@ fn handle_compress(args: CompressArgs, plan_only: bool, json_output: bool) -> Re
     };
 
     execute_image_job(&spec, plan_only, json_output)
+}
+
+fn handle_info(args: InfoArgs, json_output: bool) -> Result<()> {
+    use std::process::Command;
+
+    // Check file exists
+    if !args.input.exists() {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: args.input,
+            reason: "File does not exist".to_string(),
+        });
+    }
+
+    // Get file size
+    let file_size = std::fs::metadata(&args.input)
+        .map(|m| m.len())
+        .unwrap_or(0);
+    let file_size_str = if file_size >= 1_000_000 {
+        format!("{:.1} MB", file_size as f64 / 1_000_000.0)
+    } else if file_size >= 1_000 {
+        format!("{:.1} KB", file_size as f64 / 1_000.0)
+    } else {
+        format!("{} bytes", file_size)
+    };
+
+    // Get image dimensions using vipsheader
+    let vips_output = Command::new("vipsheader")
+        .arg("-a")
+        .arg(&args.input)
+        .output();
+
+    let (width, height, format_str, bands, depth) = match vips_output {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut width = String::new();
+            let mut height = String::new();
+            let mut bands = String::new();
+            let mut format = String::new();
+            let mut depth = String::new();
+
+            for line in stdout.lines() {
+                let parts: Vec<&str> = line.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let key = parts[0].trim();
+                    let value = parts[1].trim();
+                    match key {
+                        "width" => width = value.to_string(),
+                        "height" => height = value.to_string(),
+                        "bands" => bands = value.to_string(),
+                        "format" => depth = value.to_string(),
+                        "vips-loader" => format = value.to_string(),
+                        _ => {}
+                    }
+                }
+            }
+            (width, height, format, bands, depth)
+        }
+        _ => {
+            // Fallback - vipsheader not available
+            ("?".to_string(), "?".to_string(), "?".to_string(), "?".to_string(), "?".to_string())
+        }
+    };
+
+    if json_output {
+        let mut info = serde_json::json!({
+            "file": args.input.display().to_string(),
+            "width": width.parse::<u32>().unwrap_or(0),
+            "height": height.parse::<u32>().unwrap_or(0),
+            "format": format_str,
+            "size_bytes": file_size,
+            "size": file_size_str,
+            "bands": bands,
+            "depth": depth,
+        });
+
+        if args.exif {
+            // Get EXIF using exiftool
+            if let Ok(output) = Command::new("exiftool").arg("-json").arg(&args.input).output() {
+                if output.status.success() {
+                    if let Ok(exif) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
+                        if let Some(arr) = exif.as_array() {
+                            if let Some(first) = arr.first() {
+                                info["exif"] = first.clone();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        println!("{}", serde_json::to_string_pretty(&info).unwrap());
+    } else {
+        println!("File:       {}", args.input.display());
+        println!("Dimensions: {}x{}", width, height);
+        println!("Format:     {}", format_str);
+        println!("Size:       {}", file_size_str);
+        if bands != "?" && !bands.is_empty() {
+            println!("Bands:      {}", bands);
+        }
+        if depth != "?" && !depth.is_empty() {
+            println!("Depth:      {}", depth);
+        }
+
+        if args.exif {
+            println!("\nEXIF Metadata:");
+            // Get EXIF using exiftool
+            if let Ok(output) = Command::new("exiftool").arg(&args.input).output() {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    for line in stdout.lines() {
+                        println!("  {}", line);
+                    }
+                } else {
+                    println!("  (exiftool not available)");
+                }
+            } else {
+                println!("  (exiftool not available)");
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn execute_image_job(spec: &JobSpec, plan_only: bool, json_output: bool) -> Result<()> {
