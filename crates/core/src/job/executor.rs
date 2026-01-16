@@ -17,15 +17,18 @@
 //! When `plan_only` is true, we skip execution and just return the command that
 //! would be run. This is great for transparency and debugging.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use crate::job::progress::{
     new_job_id, ErrorInfo, JobResult, ProgressEvent, ProgressInfo, ProgressReporter,
 };
+use crate::job::spec::MetadataAction;
 use crate::job::JobSpec;
 use crate::presets::get_compression_strategy;
+use crate::tools::exiftool::ExiftoolTool;
 use crate::tools::gs::GsTool;
+use crate::tools::ocrmypdf::OcrmypdfTool;
 use crate::tools::qpdf::QpdfTool;
 use crate::tools::{Tool, ToolConfig};
 use crate::utils::error::{ForgeKitError, Result};
@@ -100,6 +103,21 @@ pub fn execute_job_with_progress(
             format,
             plan_only,
         ),
+        JobSpec::PdfOcr {
+            input,
+            output,
+            language,
+            skip_text,
+            deskew,
+            force_ocr,
+        } => execute_pdf_ocr_with_progress(
+            input, output, language, *skip_text, *deskew, *force_ocr, plan_only, reporter,
+        ),
+        JobSpec::PdfMetadata {
+            input,
+            output,
+            action,
+        } => execute_pdf_metadata(input, output.as_deref(), action, plan_only),
     }
 }
 
@@ -752,6 +770,277 @@ fn execute_pdf_extract(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn execute_pdf_ocr_with_progress(
+    input: &PathBuf,
+    output: &PathBuf,
+    language: &str,
+    skip_text: bool,
+    deskew: bool,
+    force_ocr: bool,
+    plan_only: bool,
+    reporter: &dyn ProgressReporter,
+) -> Result<String> {
+    let job_id = new_job_id();
+    let start_time = Instant::now();
+
+    // Emit start progress
+    reporter.report(&ProgressEvent::Progress {
+        version: 1,
+        job_id: job_id.clone(),
+        progress: ProgressInfo {
+            current: 0,
+            total: 100,
+            percent: 0,
+            stage: Some("starting".to_string()),
+        },
+        message: format!("Starting OCR with language '{}'", language),
+    });
+
+    // Build command parts for plan output
+    let mut cmd_parts = vec!["ocrmypdf".to_string()];
+
+    cmd_parts.push("-l".to_string());
+    cmd_parts.push(language.to_string());
+
+    if skip_text {
+        cmd_parts.push("--skip-text".to_string());
+    }
+
+    if deskew {
+        cmd_parts.push("--deskew".to_string());
+    }
+
+    if force_ocr {
+        cmd_parts.push("--force-ocr".to_string());
+    }
+
+    // Add progress flag for real execution
+    if !plan_only {
+        cmd_parts.push("--progress".to_string());
+    }
+
+    cmd_parts.push(input.display().to_string());
+    cmd_parts.push(output.display().to_string());
+
+    if plan_only {
+        return Ok(cmd_parts.join(" "));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.clone(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    // Probe for ocrmypdf
+    let tool = OcrmypdfTool;
+    let config = ToolConfig::default();
+    let tool_info = tool.probe(&config)?;
+
+    // Build actual command
+    let mut cmd = Command::new(&tool_info.path);
+    cmd.arg("-l").arg(language);
+
+    if skip_text {
+        cmd.arg("--skip-text");
+    }
+
+    if deskew {
+        cmd.arg("--deskew");
+    }
+
+    if force_ocr {
+        cmd.arg("--force-ocr");
+    }
+
+    cmd.arg(input);
+    cmd.arg(output);
+
+    // Report progress as OCR starts
+    reporter.report(&ProgressEvent::Progress {
+        version: 1,
+        job_id: job_id.clone(),
+        progress: ProgressInfo {
+            current: 10,
+            total: 100,
+            percent: 10,
+            stage: Some("ocr".to_string()),
+        },
+        message: "Running OCR (this may take a while for large documents)...".to_string(),
+    });
+
+    // Execute
+    let output_result = cmd.output().map_err(|e| ForgeKitError::ProcessingFailed {
+        tool: "ocrmypdf".to_string(),
+        stderr: format!("Failed to execute: {}", e),
+    })?;
+
+    if !output_result.status.success() {
+        let stderr = String::from_utf8_lossy(&output_result.stderr);
+        let error = ForgeKitError::ProcessingFailed {
+            tool: "ocrmypdf".to_string(),
+            stderr: stderr.to_string(),
+        };
+
+        // Emit error event
+        reporter.report(&ProgressEvent::Error {
+            version: 1,
+            job_id: job_id.clone(),
+            error: ErrorInfo {
+                code: "OCR_FAILED".to_string(),
+                message: error.to_string(),
+                hint:
+                    "Check that the input PDF is valid and tesseract language packs are installed"
+                        .to_string(),
+            },
+        });
+
+        return Err(error);
+    }
+
+    let duration_ms = start_time.elapsed().as_millis() as u64;
+    let size_bytes = std::fs::metadata(output).map(|m| m.len()).unwrap_or(0);
+
+    // Emit complete event
+    reporter.report(&ProgressEvent::Complete {
+        version: 1,
+        job_id: job_id.clone(),
+        result: JobResult {
+            output: output.display().to_string(),
+            size_bytes,
+            duration_ms,
+        },
+    });
+
+    Ok(format!(
+        "Successfully added OCR text layer to PDF: {}",
+        output.display()
+    ))
+}
+
+fn execute_pdf_metadata(
+    input: &Path,
+    output: Option<&Path>,
+    action: &MetadataAction,
+    plan_only: bool,
+) -> Result<String> {
+    match action {
+        MetadataAction::GetAll => execute_pdf_metadata_get_all(input, plan_only),
+        MetadataAction::Get(field) => execute_pdf_metadata_get(input, field, plan_only),
+        MetadataAction::Set(fields) => {
+            let output_path = output.ok_or_else(|| ForgeKitError::InvalidInput {
+                path: PathBuf::new(),
+                reason: "Output file path required for set operations".to_string(),
+            })?;
+            execute_pdf_metadata_set(input, output_path, fields, plan_only)
+        }
+    }
+}
+
+fn execute_pdf_metadata_get_all(input: &Path, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(format!(
+            "exiftool -json -PDF:all -XMP:all {}",
+            input.display()
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    // Probe for exiftool
+    let tool = ExiftoolTool;
+    let config = ToolConfig::default();
+    let tool_info = tool.probe(&config)?;
+
+    // Read metadata as JSON
+    let json = tool.read_metadata_json(&tool_info.path, input)?;
+
+    Ok(json)
+}
+
+fn execute_pdf_metadata_get(input: &Path, field: &str, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(format!("exiftool -s -s -s -{} {}", field, input.display()));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    // Probe for exiftool
+    let tool = ExiftoolTool;
+    let config = ToolConfig::default();
+    let tool_info = tool.probe(&config)?;
+
+    // Read specific field
+    let value = tool.read_field(&tool_info.path, input, field)?;
+
+    if value.is_empty() {
+        Ok(format!("Field '{}' is not set", field))
+    } else {
+        Ok(value)
+    }
+}
+
+fn execute_pdf_metadata_set(
+    input: &Path,
+    output: &Path,
+    fields: &[(String, String)],
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        let mut cmd_parts = vec!["exiftool".to_string()];
+        for (field, value) in fields {
+            cmd_parts.push(format!("-{}={}", field, value));
+        }
+        // If input != output, we need to copy first
+        if input != output {
+            cmd_parts.push("-o".to_string());
+            cmd_parts.push(output.display().to_string());
+        } else {
+            cmd_parts.push("-overwrite_original".to_string());
+        }
+        cmd_parts.push(input.display().to_string());
+        return Ok(cmd_parts.join(" "));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    // Probe for exiftool
+    let tool = ExiftoolTool;
+    let config = ToolConfig::default();
+    let tool_info = tool.probe(&config)?;
+
+    // If output is different from input, copy first
+    if input != output {
+        std::fs::copy(input, output).map_err(ForgeKitError::Io)?;
+    }
+
+    // Write metadata (to output file, overwrite original to avoid backup)
+    tool.write_metadata(&tool_info.path, output, fields, true)?;
+
+    Ok(format!(
+        "Successfully set {} metadata field(s) in {}",
+        fields.len(),
+        output.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -896,5 +1185,143 @@ mod image_tests {
 
         assert!(result.contains("jpeg")); // device
         assert!(result.contains("page_%d.jpg"));
+    }
+}
+
+#[cfg(test)]
+mod ocr_tests {
+    use super::*;
+    use crate::job::progress::NoOpProgressReporter;
+
+    #[test]
+    fn test_execute_pdf_ocr_plan() {
+        let input = PathBuf::from("scan.pdf");
+        let output = PathBuf::from("searchable.pdf");
+        let reporter = NoOpProgressReporter;
+
+        let result = execute_pdf_ocr_with_progress(
+            &input, &output, "eng", true, false, false, true, &reporter,
+        )
+        .unwrap();
+
+        assert!(result.contains("ocrmypdf"));
+        assert!(result.contains("-l eng"));
+        assert!(result.contains("--skip-text"));
+        assert!(result.contains("scan.pdf"));
+        assert!(result.contains("searchable.pdf"));
+    }
+
+    #[test]
+    fn test_execute_pdf_ocr_plan_with_deskew() {
+        let input = PathBuf::from("tilted.pdf");
+        let output = PathBuf::from("fixed.pdf");
+        let reporter = NoOpProgressReporter;
+
+        let result = execute_pdf_ocr_with_progress(
+            &input, &output, "deu", false, true, false, true, &reporter,
+        )
+        .unwrap();
+
+        assert!(result.contains("ocrmypdf"));
+        assert!(result.contains("-l deu"));
+        assert!(result.contains("--deskew"));
+        assert!(!result.contains("--skip-text"));
+    }
+
+    #[test]
+    fn test_execute_pdf_ocr_plan_force() {
+        let input = PathBuf::from("existing_text.pdf");
+        let output = PathBuf::from("reocr.pdf");
+        let reporter = NoOpProgressReporter;
+
+        let result = execute_pdf_ocr_with_progress(
+            &input, &output, "eng", false, false, true, true, &reporter,
+        )
+        .unwrap();
+
+        assert!(result.contains("ocrmypdf"));
+        assert!(result.contains("--force-ocr"));
+    }
+}
+
+#[cfg(test)]
+mod metadata_tests {
+    use super::*;
+    use crate::job::spec::MetadataAction;
+
+    #[test]
+    fn test_execute_pdf_metadata_get_all_plan() {
+        let input = PathBuf::from("doc.pdf");
+
+        let result = execute_pdf_metadata(&input, None, &MetadataAction::GetAll, true).unwrap();
+
+        assert!(result.contains("exiftool"));
+        assert!(result.contains("-json"));
+        assert!(result.contains("-PDF:all"));
+        assert!(result.contains("-XMP:all"));
+        assert!(result.contains("doc.pdf"));
+    }
+
+    #[test]
+    fn test_execute_pdf_metadata_get_field_plan() {
+        let input = PathBuf::from("doc.pdf");
+        let action = MetadataAction::Get("title".to_string());
+
+        let result = execute_pdf_metadata(&input, None, &action, true).unwrap();
+
+        assert!(result.contains("exiftool"));
+        assert!(result.contains("-s -s -s"));
+        assert!(result.contains("-title"));
+        assert!(result.contains("doc.pdf"));
+    }
+
+    #[test]
+    fn test_execute_pdf_metadata_set_plan() {
+        let input = PathBuf::from("doc.pdf");
+        let output = PathBuf::from("updated.pdf");
+        let fields = vec![
+            ("title".to_string(), "My Document".to_string()),
+            ("author".to_string(), "John Doe".to_string()),
+        ];
+        let action = MetadataAction::Set(fields);
+
+        let result = execute_pdf_metadata(&input, Some(&output), &action, true).unwrap();
+
+        assert!(result.contains("exiftool"));
+        assert!(result.contains("-title=My Document"));
+        assert!(result.contains("-author=John Doe"));
+        assert!(result.contains("-o"));
+        assert!(result.contains("updated.pdf"));
+    }
+
+    #[test]
+    fn test_execute_pdf_metadata_set_in_place_plan() {
+        let path = PathBuf::from("doc.pdf");
+        let fields = vec![("title".to_string(), "Updated Title".to_string())];
+        let action = MetadataAction::Set(fields);
+
+        let result = execute_pdf_metadata(&path, Some(&path), &action, true).unwrap();
+
+        assert!(result.contains("exiftool"));
+        assert!(result.contains("-overwrite_original"));
+        // Check that "-o " (with space) is not present - don't confuse with "-overwrite_original"
+        assert!(!result.contains(" -o "));
+    }
+
+    #[test]
+    fn test_execute_pdf_metadata_set_requires_output() {
+        let input = PathBuf::from("doc.pdf");
+        let fields = vec![("title".to_string(), "My Document".to_string())];
+        let action = MetadataAction::Set(fields);
+
+        let result = execute_pdf_metadata(&input, None, &action, false);
+
+        assert!(result.is_err());
+        match result {
+            Err(ForgeKitError::InvalidInput { reason, .. }) => {
+                assert!(reason.contains("Output file path required"));
+            }
+            _ => panic!("Expected InvalidInput error"),
+        }
     }
 }
