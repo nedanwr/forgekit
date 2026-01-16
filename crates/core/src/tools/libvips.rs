@@ -114,9 +114,9 @@ impl Tool for LibvipsTool {
 }
 
 impl LibvipsTool {
-    /// Convert image format with optional quality and strip options.
+    /// Convert image format with optional quality, compression, and strip options.
     ///
-    /// Uses `vips copy input output[Q=quality,strip]` syntax.
+    /// Uses `vips copy input output[Q=quality,compression=level,strip]` syntax.
     pub fn convert(
         &self,
         tool_path: &Path,
@@ -124,6 +124,7 @@ impl LibvipsTool {
         output: &Path,
         _format: &ImageFormat,
         quality: Option<u8>,
+        compression: Option<u8>,
         strip: bool,
     ) -> Result<()> {
         let mut cmd = Command::new(tool_path);
@@ -134,6 +135,9 @@ impl LibvipsTool {
         let mut options = Vec::new();
         if let Some(q) = quality {
             options.push(format!("Q={}", q));
+        }
+        if let Some(c) = compression {
+            options.push(format!("compression={}", c));
         }
         if strip {
             options.push("strip".to_string());
@@ -234,10 +238,19 @@ impl LibvipsTool {
     }
 
     /// Build plan command string for convert operation.
-    pub fn plan_convert(input: &Path, output: &Path, quality: Option<u8>, strip: bool) -> String {
+    pub fn plan_convert(
+        input: &Path,
+        output: &Path,
+        quality: Option<u8>,
+        compression: Option<u8>,
+        strip: bool,
+    ) -> String {
         let mut options = Vec::new();
         if let Some(q) = quality {
             options.push(format!("Q={}", q));
+        }
+        if let Some(c) = compression {
+            options.push(format!("compression={}", c));
         }
         if strip {
             options.push("strip".to_string());
@@ -312,12 +325,27 @@ mod tests {
             Path::new("input.jpg"),
             Path::new("output.webp"),
             Some(80),
+            None,
             true,
         );
         assert!(plan.contains("vips copy"));
         assert!(plan.contains("input.jpg"));
         assert!(plan.contains("Q=80"));
         assert!(plan.contains("strip"));
+    }
+
+    #[test]
+    fn test_plan_convert_with_compression() {
+        let plan = LibvipsTool::plan_convert(
+            Path::new("input.jpg"),
+            Path::new("output.png"),
+            None,
+            Some(0),
+            false,
+        );
+        assert!(plan.contains("vips copy"));
+        assert!(plan.contains("compression=0"));
+        assert!(!plan.contains("strip"));
     }
 
     #[test]
