@@ -1,4 +1,6 @@
+use forgekit_core::tools::exiftool::ExiftoolTool;
 use forgekit_core::tools::gs::GsTool;
+use forgekit_core::tools::ocrmypdf::OcrmypdfTool;
 use forgekit_core::tools::qpdf::QpdfTool;
 use forgekit_core::tools::{Tool, ToolConfig};
 use forgekit_core::utils::error::Result;
@@ -19,7 +21,9 @@ pub fn handle_check_deps() -> Result<()> {
     let tools: Vec<(&'static str, Box<dyn Tool>)> = vec![
         ("qpdf", Box::new(QpdfTool)),
         ("gs", Box::new(GsTool)),
-        // TODO: Add other tools (ocrmypdf, ffmpeg, libvips, etc.)
+        ("ocrmypdf", Box::new(OcrmypdfTool)),
+        ("exiftool", Box::new(ExiftoolTool)),
+        // TODO: Add other tools (ffmpeg, libvips, etc.)
     ];
 
     let mut all_ok = true;
