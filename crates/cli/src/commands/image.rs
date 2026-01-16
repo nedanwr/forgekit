@@ -43,17 +43,21 @@ pub struct ConvertArgs {
     #[arg(required = true, help = "Input image file")]
     pub input: PathBuf,
 
-    /// Output image file
-    #[arg(short, long, required = true, help = "Output image file")]
-    pub output: PathBuf,
+    /// Output image file (defaults to input name with new extension in current dir)
+    #[arg(short, long, help = "Output image file")]
+    pub output: Option<PathBuf>,
 
-    /// Target format (auto-detected from output extension if not specified)
+    /// Target format (required if --output not specified)
     #[arg(long, help = "Target format: jpeg, png, webp, avif, tiff, gif")]
     pub to: Option<String>,
 
     /// Quality (0-100). Applies to JPEG, WebP, and AVIF formats
     #[arg(short, long, help = "Quality (0-100). Applies to JPEG, WebP, AVIF")]
     pub quality: Option<u8>,
+
+    /// Compression level (1-9). Higher = smaller file, slower. For PNG
+    #[arg(short, long, help = "Compression (1-9). Default: none (fastest)")]
+    pub compression: Option<u8>,
 
     /// Strip metadata during conversion
     #[arg(long, help = "Strip EXIF and other metadata")]
@@ -99,9 +103,38 @@ pub fn handle_image_command(cmd: ImageCommand, plan_only: bool, json_output: boo
 }
 
 fn handle_convert(args: ConvertArgs, plan_only: bool, json_output: bool) -> Result<()> {
-    // Determine format from --to flag or output extension
-    let format = if let Some(ref to) = args.to {
-        to.parse::<ImageFormat>().map_err(|_| {
+    // Determine format and output path
+    let (format, output) = if let Some(output) = args.output {
+        // Output provided - get format from --to or output extension
+        let fmt = if let Some(ref to) = args.to {
+            to.parse::<ImageFormat>().map_err(|_| {
+                forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                    path: PathBuf::new(),
+                    reason: format!(
+                        "Unknown format '{}'. Supported: jpeg, png, webp, avif, tiff, gif",
+                        to
+                    ),
+                }
+            })?
+        } else {
+            ImageFormat::from_path(&output).ok_or_else(|| {
+                forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                    path: output.clone(),
+                    reason: "Cannot determine format from output extension. Use --to to specify."
+                        .to_string(),
+                }
+            })?
+        };
+        (fmt, output)
+    } else {
+        // No output - require --to flag and derive output path
+        let to = args.to.ok_or_else(|| {
+            forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                path: PathBuf::new(),
+                reason: "Either --output or --to is required".to_string(),
+            }
+        })?;
+        let fmt = to.parse::<ImageFormat>().map_err(|_| {
             forgekit_core::utils::error::ForgeKitError::InvalidInput {
                 path: PathBuf::new(),
                 reason: format!(
@@ -109,16 +142,16 @@ fn handle_convert(args: ConvertArgs, plan_only: bool, json_output: bool) -> Resu
                     to
                 ),
             }
-        })?
-    } else {
-        ImageFormat::from_path(&args.output).ok_or_else(|| {
+        })?;
+        // Derive output: input stem + new extension in current directory
+        let stem = args.input.file_stem().ok_or_else(|| {
             forgekit_core::utils::error::ForgeKitError::InvalidInput {
-                path: args.output.clone(),
-                reason:
-                    "Cannot determine format from output extension. Use --to to specify format."
-                        .to_string(),
+                path: args.input.clone(),
+                reason: "Cannot determine filename from input".to_string(),
             }
-        })?
+        })?;
+        let output = PathBuf::from(stem).with_extension(fmt.extension());
+        (fmt, output)
     };
 
     // Validate quality range
@@ -131,11 +164,24 @@ fn handle_convert(args: ConvertArgs, plan_only: bool, json_output: bool) -> Resu
         }
     }
 
+    // Validate compression range (1-9) and default to 0 (no compression) if not specified
+    let compression = match args.compression {
+        Some(c) if c >= 1 && c <= 9 => Some(c),
+        Some(_) => {
+            return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                path: PathBuf::new(),
+                reason: "Compression must be between 1 and 9".to_string(),
+            });
+        }
+        None => Some(0), // Default: no compression (fastest)
+    };
+
     let spec = JobSpec::ImageConvert {
         input: args.input,
-        output: args.output,
+        output,
         format,
         quality: args.quality,
+        compression,
         strip_metadata: args.strip,
     };
 
