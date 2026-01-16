@@ -89,7 +89,7 @@ If package manager installation isn't available, you can install ForgeKit manual
 
 **1. Install ForgeKit binary:**
 
-Download the latest release from [GitHub Releases](https://github.com/nedanwar/forgekit/releases) and add to your PATH.
+Download the latest release from [GitHub Releases](https://github.com/nedanwr/forgekit/releases) and add to your PATH.
 
 **2. Install dependencies:**
 
