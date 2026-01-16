@@ -11,6 +11,7 @@
 //! - **Serialization**: Could save jobs to disk, queue them, etc. (future)
 //! - **Clarity**: The executor code is cleaner when it just focuses on "how", not "what"
 
+use crate::utils::image::ImageFormat;
 use crate::utils::pages::PageSpec;
 use std::path::PathBuf;
 
@@ -142,6 +143,50 @@ pub enum JobSpec {
         /// The metadata action to perform.
         action: MetadataAction,
     },
+
+    // ========== Image Operations ==========
+    /// Convert image to a different format.
+    ///
+    /// Uses libvips (preferred) or ImageMagick (fallback) for conversion.
+    /// Supports JPEG, PNG, WebP, AVIF, TIFF, and GIF formats.
+    ImageConvert {
+        /// Input image file.
+        input: PathBuf,
+        /// Output image file.
+        output: PathBuf,
+        /// Target format (auto-detected from output extension if not specified).
+        format: ImageFormat,
+        /// Quality (0-100). Format-dependent: JPEG/WebP/AVIF use this.
+        quality: Option<u8>,
+        /// Strip metadata during conversion.
+        strip_metadata: bool,
+    },
+
+    /// Resize image with aspect ratio preservation.
+    ///
+    /// Resizes to fit within the specified dimensions while preserving
+    /// the original aspect ratio. Specify width, height, or both.
+    ImageResize {
+        /// Input image file.
+        input: PathBuf,
+        /// Output image file.
+        output: PathBuf,
+        /// Target width (if only width specified, height calculated to preserve ratio).
+        width: Option<u32>,
+        /// Target height (if only height specified, width calculated to preserve ratio).
+        height: Option<u32>,
+    },
+
+    /// Strip EXIF and other metadata from image.
+    ///
+    /// Removes EXIF, XMP, IPTC, ICC profiles, and other metadata.
+    /// Useful for privacy before sharing images.
+    ImageStrip {
+        /// Input image file.
+        input: PathBuf,
+        /// Output image file.
+        output: PathBuf,
+    },
 }
 
 impl JobSpec {
@@ -183,6 +228,22 @@ impl JobSpec {
                     format!("Set {} PDF metadata field(s)", fields.len())
                 }
             },
+            JobSpec::ImageConvert {
+                format, quality, ..
+            } => {
+                if let Some(q) = quality {
+                    format!("Convert image to {} (quality {})", format.extension(), q)
+                } else {
+                    format!("Convert image to {}", format.extension())
+                }
+            }
+            JobSpec::ImageResize { width, height, .. } => match (width, height) {
+                (Some(w), Some(h)) => format!("Resize image to {}x{}", w, h),
+                (Some(w), None) => format!("Resize image to width {}", w),
+                (None, Some(h)) => format!("Resize image to height {}", h),
+                (None, None) => "Resize image".to_string(),
+            },
+            JobSpec::ImageStrip { .. } => "Strip image metadata".to_string(),
         }
     }
 }
@@ -294,5 +355,60 @@ mod tests {
             ]),
         };
         assert_eq!(spec.description(), "Set 2 PDF metadata field(s)");
+    }
+
+    #[test]
+    fn test_image_convert_description() {
+        let spec = JobSpec::ImageConvert {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("photo.webp"),
+            format: ImageFormat::WebP,
+            quality: Some(80),
+            strip_metadata: false,
+        };
+        assert_eq!(spec.description(), "Convert image to webp (quality 80)");
+    }
+
+    #[test]
+    fn test_image_convert_description_no_quality() {
+        let spec = JobSpec::ImageConvert {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("photo.png"),
+            format: ImageFormat::Png,
+            quality: None,
+            strip_metadata: true,
+        };
+        assert_eq!(spec.description(), "Convert image to png");
+    }
+
+    #[test]
+    fn test_image_resize_description() {
+        let spec = JobSpec::ImageResize {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("thumb.jpg"),
+            width: Some(800),
+            height: Some(600),
+        };
+        assert_eq!(spec.description(), "Resize image to 800x600");
+    }
+
+    #[test]
+    fn test_image_resize_description_width_only() {
+        let spec = JobSpec::ImageResize {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("thumb.jpg"),
+            width: Some(800),
+            height: None,
+        };
+        assert_eq!(spec.description(), "Resize image to width 800");
+    }
+
+    #[test]
+    fn test_image_strip_description() {
+        let spec = JobSpec::ImageStrip {
+            input: PathBuf::from("photo.jpg"),
+            output: PathBuf::from("clean.jpg"),
+        };
+        assert_eq!(spec.description(), "Strip image metadata");
     }
 }
