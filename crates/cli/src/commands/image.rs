@@ -213,7 +213,7 @@ fn handle_convert(args: ConvertArgs, plan_only: bool, json_output: bool) -> Resu
 
     // Validate compression range (1-9) and default to 0 (no compression) if not specified
     let compression = match args.compression {
-        Some(c) if c >= 1 && c <= 9 => Some(c),
+        Some(c) if (1..=9).contains(&c) => Some(c),
         Some(_) => {
             return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
                 path: PathBuf::new(),
