@@ -533,6 +533,114 @@ impl FfmpegTool {
             output.display()
         )
     }
+
+    // ========== Video Operations ==========
+
+    /// Transcode video to H.264 using software x264 encoder.
+    ///
+    /// Uses CRF (Constant Rate Factor) for quality control.
+    /// CRF 0 = lossless, CRF 51 = worst quality. Default is 23.
+    #[allow(clippy::too_many_arguments)]
+    pub fn transcode(
+        &self,
+        tool_path: &Path,
+        input: &Path,
+        output: &Path,
+        crf: u8,
+        preset: &str,
+        scale: Option<(i32, i32)>,
+        copy_audio: bool,
+    ) -> Result<()> {
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y"); // Overwrite output
+        cmd.arg("-i").arg(input);
+
+        // Video codec: H.264 with x264
+        cmd.arg("-c:v").arg("libx264");
+        cmd.arg("-crf").arg(crf.to_string());
+        cmd.arg("-preset").arg(preset);
+
+        // Scale filter if specified
+        if let Some((width, height)) = scale {
+            let scale_filter = if height == -1 {
+                // Preserve aspect ratio, scale to width
+                format!("scale={}:-2", width) // -2 ensures divisible by 2
+            } else {
+                format!("scale={}:{}", width, height)
+            };
+            cmd.arg("-vf").arg(scale_filter);
+        }
+
+        // Audio handling
+        if copy_audio {
+            cmd.arg("-c:a").arg("copy");
+        } else {
+            cmd.arg("-c:a").arg("aac");
+            cmd.arg("-b:a").arg("128k");
+        }
+
+        cmd.arg(output);
+
+        let output_result = cmd
+            .output()
+            .map_err(|e| ForgeKitError::Other(anyhow::anyhow!("Failed to run ffmpeg: {}", e)))?;
+
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Generate plan string for video transcode (for --plan flag).
+    pub fn plan_transcode(
+        input: &Path,
+        output: &Path,
+        crf: u8,
+        preset: &str,
+        scale: Option<(i32, i32)>,
+        copy_audio: bool,
+    ) -> String {
+        let mut parts = vec![
+            "ffmpeg".to_string(),
+            "-y".to_string(),
+            "-i".to_string(),
+            input.display().to_string(),
+            "-c:v".to_string(),
+            "libx264".to_string(),
+            "-crf".to_string(),
+            crf.to_string(),
+            "-preset".to_string(),
+            preset.to_string(),
+        ];
+
+        if let Some((width, height)) = scale {
+            let scale_filter = if height == -1 {
+                format!("scale={}:-2", width)
+            } else {
+                format!("scale={}:{}", width, height)
+            };
+            parts.push("-vf".to_string());
+            parts.push(scale_filter);
+        }
+
+        if copy_audio {
+            parts.push("-c:a".to_string());
+            parts.push("copy".to_string());
+        } else {
+            parts.push("-c:a".to_string());
+            parts.push("aac".to_string());
+            parts.push("-b:a".to_string());
+            parts.push("128k".to_string());
+        }
+
+        parts.push(output.display().to_string());
+        parts.join(" ")
+    }
 }
 
 #[cfg(test)]
