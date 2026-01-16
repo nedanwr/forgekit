@@ -67,7 +67,11 @@ pub struct ConvertArgs {
     pub output: Option<PathBuf>,
 
     /// Target format (required if --output not specified)
-    #[arg(short = 't', long, help = "Target format: jpeg, png, webp, avif, tiff, gif")]
+    #[arg(
+        short = 't',
+        long,
+        help = "Target format: jpeg, png, webp, avif, tiff, gif"
+    )]
     pub to: Option<String>,
 
     /// Quality (0-100). Applies to JPEG, WebP, and AVIF formats
@@ -124,7 +128,12 @@ pub struct CompressArgs {
     pub output: Option<PathBuf>,
 
     /// Quality (0-100). Default: 80. For JPEG, WebP, AVIF, and RAW conversion
-    #[arg(short, long, default_value = "80", help = "Quality (0-100). Default: 80")]
+    #[arg(
+        short,
+        long,
+        default_value = "80",
+        help = "Quality (0-100). Default: 80"
+    )]
     pub quality: u8,
 }
 
@@ -175,12 +184,13 @@ fn handle_convert(args: ConvertArgs, plan_only: bool, json_output: bool) -> Resu
         (fmt, output)
     } else {
         // No output - require --to flag and derive output path
-        let to = args.to.ok_or_else(|| {
-            forgekit_core::utils::error::ForgeKitError::InvalidInput {
-                path: PathBuf::new(),
-                reason: "Either --output or --to is required".to_string(),
-            }
-        })?;
+        let to =
+            args.to.ok_or_else(
+                || forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                    path: PathBuf::new(),
+                    reason: "Either --output or --to is required".to_string(),
+                },
+            )?;
         let fmt = to.parse::<ImageFormat>().map_err(|_| {
             forgekit_core::utils::error::ForgeKitError::InvalidInput {
                 path: PathBuf::new(),
@@ -261,7 +271,12 @@ fn handle_resize(args: ResizeArgs, plan_only: bool, json_output: bool) -> Result
             (None, Some(h)) => format!("_{}h", h),
             (None, None) => unreachable!(),
         };
-        let new_name = format!("{}{}.{}", stem.to_string_lossy(), suffix, ext.to_string_lossy());
+        let new_name = format!(
+            "{}{}.{}",
+            stem.to_string_lossy(),
+            suffix,
+            ext.to_string_lossy()
+        );
         PathBuf::from(new_name)
     };
 
@@ -287,7 +302,11 @@ fn handle_strip(args: StripArgs, plan_only: bool, json_output: bool) -> Result<(
             }
         })?;
         let ext = args.input.extension().unwrap_or_default();
-        let new_name = format!("{}_stripped.{}", stem.to_string_lossy(), ext.to_string_lossy());
+        let new_name = format!(
+            "{}_stripped.{}",
+            stem.to_string_lossy(),
+            ext.to_string_lossy()
+        );
         PathBuf::from(new_name)
     };
 
@@ -323,7 +342,9 @@ fn handle_compress(args: CompressArgs, plan_only: bool, json_output: bool) -> Re
     if is_raw {
         return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
             path: args.input,
-            reason: "RAW files cannot be compressed. Use 'image convert' to convert to JPEG/WebP first.".to_string(),
+            reason:
+                "RAW files cannot be compressed. Use 'image convert' to convert to JPEG/WebP first."
+                    .to_string(),
         });
     }
 
@@ -332,7 +353,11 @@ fn handle_compress(args: CompressArgs, plan_only: bool, json_output: bool) -> Re
     // Determine output format and path
     let (output, format, quality, compression) = if let Some(output) = args.output {
         let fmt = ImageFormat::from_path(&output).unwrap_or(ImageFormat::Jpeg);
-        let comp = if fmt == ImageFormat::Png { Some(9) } else { None };
+        let comp = if fmt == ImageFormat::Png {
+            Some(9)
+        } else {
+            None
+        };
         (output, fmt, Some(args.quality), comp)
     } else {
         let stem = args.input.file_stem().ok_or_else(|| {
@@ -349,7 +374,11 @@ fn handle_compress(args: CompressArgs, plan_only: bool, json_output: bool) -> Re
         } else {
             // Keep same format (JPEG, WebP, etc.)
             let ext = args.input.extension().unwrap_or_default();
-            let new_name = format!("{}_compressed.{}", stem.to_string_lossy(), ext.to_string_lossy());
+            let new_name = format!(
+                "{}_compressed.{}",
+                stem.to_string_lossy(),
+                ext.to_string_lossy()
+            );
             let fmt = ImageFormat::from_path(&args.input).unwrap_or(ImageFormat::Jpeg);
             (PathBuf::from(new_name), fmt, Some(args.quality), None)
         }
@@ -379,9 +408,7 @@ fn handle_info(args: InfoArgs, json_output: bool) -> Result<()> {
     }
 
     // Get file size
-    let file_size = std::fs::metadata(&args.input)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let file_size = std::fs::metadata(&args.input).map(|m| m.len()).unwrap_or(0);
     let file_size_str = if file_size >= 1_000_000 {
         format!("{:.1} MB", file_size as f64 / 1_000_000.0)
     } else if file_size >= 1_000 {
@@ -424,7 +451,13 @@ fn handle_info(args: InfoArgs, json_output: bool) -> Result<()> {
         }
         _ => {
             // Fallback - vipsheader not available
-            ("?".to_string(), "?".to_string(), "?".to_string(), "?".to_string(), "?".to_string())
+            (
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+                "?".to_string(),
+            )
         }
     };
 
@@ -442,7 +475,11 @@ fn handle_info(args: InfoArgs, json_output: bool) -> Result<()> {
 
         if args.exif {
             // Get EXIF using exiftool
-            if let Ok(output) = Command::new("exiftool").arg("-json").arg(&args.input).output() {
+            if let Ok(output) = Command::new("exiftool")
+                .arg("-json")
+                .arg(&args.input)
+                .output()
+            {
                 if output.status.success() {
                     if let Ok(exif) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
                         if let Some(arr) = exif.as_array() {
