@@ -179,6 +179,14 @@ pub fn execute_job_with_progress(
             gain_db,
         } => execute_audio_volume(input, output, *gain_db, plan_only),
         JobSpec::AudioMono { input, output } => execute_audio_mono(input, output, plan_only),
+        JobSpec::VideoTranscode {
+            input,
+            output,
+            crf,
+            preset,
+            scale,
+            copy_audio,
+        } => execute_video_transcode(input, output, *crf, preset, *scale, *copy_audio, plan_only),
     }
 }
 
@@ -1450,6 +1458,52 @@ fn execute_audio_mono(input: &Path, output: &Path, plan_only: bool) -> Result<St
     ))
 }
 
+// ========== Video Operations ==========
+
+fn execute_video_transcode(
+    input: &Path,
+    output: &Path,
+    crf: u8,
+    preset: &str,
+    scale: Option<(i32, i32)>,
+    copy_audio: bool,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_transcode(
+            input, output, crf, preset, scale, copy_audio,
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.transcode(&tool_info.path, input, output, crf, preset, scale, copy_audio)?;
+
+    let scale_str = scale
+        .map(|(w, h)| {
+            if h == -1 {
+                format!(" scaled to {}p", w)
+            } else {
+                format!(" scaled to {}x{}", w, h)
+            }
+        })
+        .unwrap_or_default();
+
+    Ok(format!(
+        "Successfully transcoded video to {} (H.264, CRF {}){}",
+        output.display(),
+        crf,
+        scale_str
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2147,5 +2201,81 @@ mod audio_operation_tests {
 
         assert!(result.contains("ffmpeg"));
         assert!(result.contains("-ac 1"));
+    }
+}
+
+#[cfg(test)]
+mod video_operation_tests {
+    use super::*;
+
+    #[test]
+    fn test_execute_video_transcode_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.mp4");
+
+        let result =
+            execute_video_transcode(&input, &output, 23, "medium", None, true, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-i video.mp4"));
+        assert!(result.contains("-c:v libx264"));
+        assert!(result.contains("-crf 23"));
+        assert!(result.contains("-preset medium"));
+        assert!(result.contains("-c:a copy"));
+    }
+
+    #[test]
+    fn test_execute_video_transcode_with_scale_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.mp4");
+
+        let result = execute_video_transcode(
+            &input,
+            &output,
+            23,
+            "fast",
+            Some((1920, 1080)),
+            true,
+            true,
+        )
+        .unwrap();
+
+        assert!(result.contains("-vf scale=1920:1080"));
+    }
+
+    #[test]
+    fn test_execute_video_transcode_width_only_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.mp4");
+
+        // -1 height = preserve aspect ratio
+        let result = execute_video_transcode(
+            &input,
+            &output,
+            20,
+            "slow",
+            Some((1280, -1)),
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert!(result.contains("-vf scale=1280:-2")); // -2 ensures divisible by 2
+        assert!(result.contains("-c:a aac"));
+        assert!(result.contains("-b:a 128k"));
+    }
+
+    #[test]
+    fn test_execute_video_transcode_reencode_audio_plan() {
+        let input = PathBuf::from("video.mkv");
+        let output = PathBuf::from("output.mp4");
+
+        let result =
+            execute_video_transcode(&input, &output, 18, "fast", None, false, true).unwrap();
+
+        assert!(result.contains("-c:v libx264"));
+        assert!(result.contains("-crf 18"));
+        assert!(result.contains("-c:a aac"));
+        assert!(result.contains("-b:a 128k"));
     }
 }
