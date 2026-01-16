@@ -36,6 +36,19 @@ forgekit image compress photo.jpg --quality 60           # photo_compressed.jpg
 forgekit image info photo.jpg --exif                     # show dimensions + EXIF
 ```
 
+### Audio Operations
+
+```bash
+forgekit audio convert song.wav -t mp3 --bitrate 320     # song.mp3
+forgekit audio normalize song.wav --target streaming     # song_normalized.wav
+forgekit audio extract video.mp4 -t mp3 --bitrate 192    # video.mp3
+forgekit audio trim song.mp3 --start 0:30 --end 2:00 -o clip.mp3
+forgekit audio join intro.mp3 main.mp3 -o podcast.mp3
+forgekit audio volume quiet.wav --gain +6dB -o louder.wav
+forgekit audio mono stereo.wav                           # stereo_mono.wav
+forgekit audio info song.mp3                             # duration, format, bitrate
+```
+
 ### Global Options
 
 - `--plan` - Show commands without executing
