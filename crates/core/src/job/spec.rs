@@ -297,6 +297,84 @@ pub enum JobSpec {
         /// Copy audio stream instead of re-encoding.
         copy_audio: bool,
     },
+
+    /// Trim video to a specific time range.
+    ///
+    /// Uses ffmpeg with stream copy for fast trimming.
+    VideoTrim {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Start time in seconds (optional).
+        start: Option<f64>,
+        /// End time in seconds (optional).
+        end: Option<f64>,
+    },
+
+    /// Join multiple video files into one.
+    ///
+    /// Uses ffmpeg concat demuxer. All inputs must have same codec/resolution.
+    VideoJoin {
+        /// Input video files.
+        inputs: Vec<PathBuf>,
+        /// Output video file.
+        output: PathBuf,
+    },
+
+    /// Extract a thumbnail frame from video at a specific timestamp.
+    VideoThumbnail {
+        /// Input video file.
+        input: PathBuf,
+        /// Output image file (jpg, png).
+        output: PathBuf,
+        /// Timestamp in seconds to extract frame.
+        timestamp: f64,
+    },
+
+    /// Convert video clip to animated GIF.
+    VideoGif {
+        /// Input video file.
+        input: PathBuf,
+        /// Output GIF file.
+        output: PathBuf,
+        /// Start time in seconds (optional).
+        start: Option<f64>,
+        /// Duration in seconds (optional, default 5).
+        duration: Option<f64>,
+        /// Output width (height auto-calculated).
+        width: Option<u32>,
+        /// Frame rate for GIF (default 10).
+        fps: Option<u32>,
+    },
+
+    /// Change video playback speed.
+    VideoSpeed {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Speed multiplier (0.5 = half speed, 2.0 = double speed).
+        speed: f64,
+    },
+
+    /// Rotate video by specified degrees.
+    VideoRotate {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Rotation angle: 90, 180, or 270 degrees clockwise.
+        degrees: u32,
+    },
+
+    /// Remove audio track from video.
+    VideoMute {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file (no audio).
+        output: PathBuf,
+    },
 }
 
 impl JobSpec {
@@ -406,6 +484,47 @@ impl JobSpec {
                     .unwrap_or_default();
                 format!("Transcode video to H.264 (CRF {}, {}){}", crf, preset, scale_str)
             }
+            JobSpec::VideoTrim { start, end, .. } => match (start, end) {
+                (Some(s), Some(e)) => format!("Trim video from {:.1}s to {:.1}s", s, e),
+                (Some(s), None) => format!("Trim video from {:.1}s to end", s),
+                (None, Some(e)) => format!("Trim video from start to {:.1}s", e),
+                (None, None) => "Trim video".to_string(),
+            },
+            JobSpec::VideoJoin { inputs, .. } => {
+                format!("Join {} video files", inputs.len())
+            }
+            JobSpec::VideoThumbnail { timestamp, .. } => {
+                format!("Extract thumbnail at {:.1}s", timestamp)
+            }
+            JobSpec::VideoGif {
+                start,
+                duration,
+                width,
+                fps,
+                ..
+            } => {
+                let mut desc = "Convert to GIF".to_string();
+                if let Some(s) = start {
+                    desc.push_str(&format!(" from {:.1}s", s));
+                }
+                if let Some(d) = duration {
+                    desc.push_str(&format!(" ({:.1}s)", d));
+                }
+                if let Some(w) = width {
+                    desc.push_str(&format!(" {}px", w));
+                }
+                if let Some(f) = fps {
+                    desc.push_str(&format!(" {}fps", f));
+                }
+                desc
+            }
+            JobSpec::VideoSpeed { speed, .. } => {
+                format!("Change video speed to {:.1}x", speed)
+            }
+            JobSpec::VideoRotate { degrees, .. } => {
+                format!("Rotate video {}°", degrees)
+            }
+            JobSpec::VideoMute { .. } => "Remove audio from video".to_string(),
         }
     }
 }
