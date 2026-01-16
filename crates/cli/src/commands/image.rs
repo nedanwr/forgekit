@@ -35,6 +35,16 @@ pub enum ImageCommand {
     /// Removes EXIF, XMP, IPTC, ICC profiles, and other metadata.
     /// Useful for privacy before sharing images.
     Strip(StripArgs),
+
+    /// Compress image to reduce file size
+    ///
+    /// Examples:
+    ///   forgekit image compress photo.jpg
+    ///   forgekit image compress photo.jpg --quality 60
+    ///
+    /// For JPEG/WebP/AVIF: reduces quality (default 80) + strips metadata.
+    /// For PNG: uses max compression (level 9) + strips metadata.
+    Compress(CompressArgs),
 }
 
 #[derive(Args, Clone)]
@@ -94,11 +104,27 @@ pub struct StripArgs {
     pub output: Option<PathBuf>,
 }
 
+#[derive(Args, Clone)]
+pub struct CompressArgs {
+    /// Input image file
+    #[arg(required = true, help = "Input image file")]
+    pub input: PathBuf,
+
+    /// Output image file (defaults to input_compressed.ext in current dir)
+    #[arg(short, long, help = "Output image file")]
+    pub output: Option<PathBuf>,
+
+    /// Quality (0-100). Default: 80. For JPEG, WebP, AVIF, and RAW conversion
+    #[arg(short, long, default_value = "80", help = "Quality (0-100). Default: 80")]
+    pub quality: u8,
+}
+
 pub fn handle_image_command(cmd: ImageCommand, plan_only: bool, json_output: bool) -> Result<()> {
     match cmd {
         ImageCommand::Convert(args) => handle_convert(args, plan_only, json_output),
         ImageCommand::Resize(args) => handle_resize(args, plan_only, json_output),
         ImageCommand::Strip(args) => handle_strip(args, plan_only, json_output),
+        ImageCommand::Compress(args) => handle_compress(args, plan_only, json_output),
     }
 }
 
@@ -247,6 +273,74 @@ fn handle_strip(args: StripArgs, plan_only: bool, json_output: bool) -> Result<(
     let spec = JobSpec::ImageStrip {
         input: args.input,
         output,
+    };
+
+    execute_image_job(&spec, plan_only, json_output)
+}
+
+fn handle_compress(args: CompressArgs, plan_only: bool, json_output: bool) -> Result<()> {
+    // Validate quality
+    if args.quality > 100 {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "Quality must be between 0 and 100".to_string(),
+        });
+    }
+
+    // Detect file type
+    let input_ext = args
+        .input
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+
+    // Reject RAW files
+    let is_raw = matches!(
+        input_ext.as_str(),
+        "dng" | "cr2" | "cr3" | "nef" | "arw" | "orf" | "rw2" | "raf" | "pef" | "srw" | "raw"
+    );
+    if is_raw {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: args.input,
+            reason: "RAW files cannot be compressed. Use 'image convert' to convert to JPEG/WebP first.".to_string(),
+        });
+    }
+
+    let is_png = input_ext == "png";
+
+    // Determine output format and path
+    let (output, format, quality, compression) = if let Some(output) = args.output {
+        let fmt = ImageFormat::from_path(&output).unwrap_or(ImageFormat::Jpeg);
+        let comp = if fmt == ImageFormat::Png { Some(9) } else { None };
+        (output, fmt, Some(args.quality), comp)
+    } else {
+        let stem = args.input.file_stem().ok_or_else(|| {
+            forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                path: args.input.clone(),
+                reason: "Cannot determine filename from input".to_string(),
+            }
+        })?;
+
+        if is_png {
+            // PNG → PNG with max compression
+            let new_name = format!("{}_compressed.png", stem.to_string_lossy());
+            (PathBuf::from(new_name), ImageFormat::Png, None, Some(9))
+        } else {
+            // Keep same format (JPEG, WebP, etc.)
+            let ext = args.input.extension().unwrap_or_default();
+            let new_name = format!("{}_compressed.{}", stem.to_string_lossy(), ext.to_string_lossy());
+            let fmt = ImageFormat::from_path(&args.input).unwrap_or(ImageFormat::Jpeg);
+            (PathBuf::from(new_name), fmt, Some(args.quality), None)
+        }
+    };
+
+    let spec = JobSpec::ImageConvert {
+        input: args.input,
+        output,
+        format,
+        quality,
+        compression,
+        strip_metadata: true, // Always strip for compression
     };
 
     execute_image_job(&spec, plan_only, json_output)
