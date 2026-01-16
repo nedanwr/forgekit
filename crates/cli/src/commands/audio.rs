@@ -3,7 +3,7 @@ use forgekit_core::job::executor::execute_job;
 use forgekit_core::job::JobSpec;
 use forgekit_core::utils::audio::{AudioFormat, LoudnessTarget};
 use forgekit_core::utils::error::Result;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Subcommand, Clone)]
 pub enum AudioCommand {
@@ -55,9 +55,10 @@ pub enum AudioCommand {
     ///
     /// Examples:
     ///   forgekit audio join intro.mp3 main.mp3 outro.mp3 --output podcast.mp3
-    ///   forgekit audio join part1.wav part2.wav --output full.wav
+    ///   forgekit audio join "part_*.wav" --output full.wav
+    ///   forgekit audio join "track_[0-9][0-9].mp3" --output album.mp3
     ///
-    /// Files are concatenated in the order specified.
+    /// Supports glob patterns. Files are sorted naturally (part_2 before part_10).
     Join(JoinArgs),
 
     /// Adjust audio volume/gain
@@ -178,9 +179,9 @@ pub struct TrimArgs {
 
 #[derive(Args, Clone)]
 pub struct JoinArgs {
-    /// Input audio files (at least 2)
-    #[arg(required = true, num_args = 2.., help = "Input audio files to join")]
-    pub inputs: Vec<PathBuf>,
+    /// Input audio files or glob pattern (e.g., "part_*.wav")
+    #[arg(required = true, num_args = 1.., help = "Input files or glob pattern (e.g., part_*.wav)")]
+    pub inputs: Vec<String>,
 
     /// Output audio file
     #[arg(short, long, required = true, help = "Output audio file")]
@@ -409,14 +410,92 @@ fn handle_trim(args: &TrimArgs, plan_only: bool) -> Result<()> {
 }
 
 fn handle_join(args: &JoinArgs, plan_only: bool) -> Result<()> {
+    // Expand glob patterns and collect files
+    let mut files: Vec<PathBuf> = Vec::new();
+
+    for input in &args.inputs {
+        // Check if input contains glob characters
+        if input.contains('*') || input.contains('?') || input.contains('[') {
+            let paths = glob::glob(input).map_err(|e| {
+                forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                    path: PathBuf::from(input),
+                    reason: format!("Invalid glob pattern: {}", e),
+                }
+            })?;
+
+            for entry in paths {
+                match entry {
+                    Ok(path) => files.push(path),
+                    Err(e) => {
+                        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                            path: PathBuf::new(),
+                            reason: format!("Glob error: {}", e),
+                        });
+                    }
+                }
+            }
+        } else {
+            files.push(PathBuf::from(input));
+        }
+    }
+
+    // Sort files naturally (so part_2 comes before part_10)
+    files.sort_by_key(|a| natural_sort_key(a));
+
+    if files.len() < 2 {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: format!("At least 2 files required for join, found {}", files.len()),
+        });
+    }
+
     let spec = JobSpec::AudioJoin {
-        inputs: args.inputs.clone(),
+        inputs: files,
         output: args.output.clone(),
     };
 
     let result = execute_job(&spec, plan_only)?;
     println!("{}", result);
     Ok(())
+}
+
+/// Generate a sort key for natural sorting (so part_2 < part_10)
+fn natural_sort_key(path: &Path) -> Vec<NaturalSortPart> {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let mut parts = Vec::new();
+    let mut current_num = String::new();
+    let mut current_str = String::new();
+
+    for c in name.chars() {
+        if c.is_ascii_digit() {
+            if !current_str.is_empty() {
+                parts.push(NaturalSortPart::Str(current_str.clone()));
+                current_str.clear();
+            }
+            current_num.push(c);
+        } else {
+            if !current_num.is_empty() {
+                parts.push(NaturalSortPart::Num(current_num.parse().unwrap_or(0)));
+                current_num.clear();
+            }
+            current_str.push(c);
+        }
+    }
+
+    if !current_num.is_empty() {
+        parts.push(NaturalSortPart::Num(current_num.parse().unwrap_or(0)));
+    }
+    if !current_str.is_empty() {
+        parts.push(NaturalSortPart::Str(current_str));
+    }
+
+    parts
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum NaturalSortPart {
+    Num(u64),
+    Str(String),
 }
 
 fn handle_volume(args: &VolumeArgs, plan_only: bool) -> Result<()> {
