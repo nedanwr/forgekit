@@ -1,4 +1,5 @@
 use clap::{Args, Subcommand};
+use forgekit_core::job::spec::MetadataAction;
 use forgekit_core::job::JobSpec;
 use forgekit_core::utils::error::Result;
 use forgekit_core::utils::pages::PageSpec;
@@ -55,6 +56,29 @@ pub enum PdfCommand {
     /// Page spec: numbers (1), ranges (1-5, 7-), keywords (odd, even), exclusions (!2)
     /// Formats: pdf (default), png, jpeg/jpg (image files per page)
     Extract(ExtractArgs),
+    /// Add OCR text layer to a scanned PDF
+    ///
+    /// Makes scanned PDFs searchable by adding an invisible text layer.
+    ///
+    /// Examples:
+    ///   forgekit pdf ocr scan.pdf --output searchable.pdf
+    ///   forgekit pdf ocr scan.pdf --output searchable.pdf --language deu
+    ///   forgekit pdf ocr mixed.pdf --output searchable.pdf --skip-text
+    ///   forgekit pdf ocr tilted.pdf --output fixed.pdf --deskew
+    ///
+    /// Language codes: eng (English), deu (German), fra (French), spa (Spanish), etc.
+    /// Use 'tesseract --list-langs' to see available languages.
+    Ocr(OcrArgs),
+    /// Read or write PDF metadata (title, author, etc.)
+    ///
+    /// Examples:
+    ///   forgekit pdf metadata doc.pdf                           # Show all metadata
+    ///   forgekit pdf metadata doc.pdf --get title               # Get specific field
+    ///   forgekit pdf metadata doc.pdf --set title="My Doc"      # Set a field
+    ///   forgekit pdf metadata doc.pdf --set title="My Doc" --set author="John" --output updated.pdf
+    ///
+    /// Supported fields: title, author, subject, keywords, creator, producer
+    Metadata(MetadataArgs),
 }
 
 #[derive(Args, Clone)]
@@ -169,6 +193,67 @@ pub struct ExtractArgs {
     pub format: String,
 }
 
+#[derive(Args, Clone)]
+pub struct OcrArgs {
+    /// Input PDF file
+    #[arg(
+        required = true,
+        help = "Input PDF file (typically a scanned document)"
+    )]
+    pub input: PathBuf,
+
+    /// Output PDF file path
+    #[arg(short, long, required = true, help = "Output PDF file path")]
+    pub output: PathBuf,
+
+    /// OCR language (e.g., "eng", "deu", "fra")
+    #[arg(
+        short,
+        long,
+        default_value = "eng",
+        help = "OCR language code (e.g., eng, deu, fra, spa)"
+    )]
+    pub language: String,
+
+    /// Skip pages that already have text
+    #[arg(
+        long,
+        help = "Skip pages that already have text (faster for mixed documents)"
+    )]
+    pub skip_text: bool,
+
+    /// Deskew pages before OCR (fixes tilted scans)
+    #[arg(long, help = "Deskew pages before OCR (corrects tilted scans)")]
+    pub deskew: bool,
+
+    /// Force OCR even if text already exists
+    #[arg(long, help = "Force OCR even if text already exists (redo OCR)")]
+    pub force_ocr: bool,
+}
+
+#[derive(Args, Clone)]
+pub struct MetadataArgs {
+    /// Input PDF file
+    #[arg(required = true, help = "Input PDF file")]
+    pub input: PathBuf,
+
+    /// Output PDF file path (only required for --set)
+    #[arg(short, long, help = "Output PDF file path (only required for --set)")]
+    pub output: Option<PathBuf>,
+
+    /// Get a specific metadata field
+    #[arg(long, help = "Get a specific metadata field (e.g., title, author)")]
+    pub get: Option<String>,
+
+    /// Set metadata fields (can be repeated). Format: field=value
+    #[arg(
+        long = "set",
+        value_name = "FIELD=VALUE",
+        help = "Set metadata field (e.g., --set title=\"My Doc\" --set author=\"John\")"
+    )]
+    pub set_fields: Vec<String>,
+}
+
 pub fn handle_pdf_command(cmd: PdfCommand, plan_only: bool, json_output: bool) -> Result<()> {
     match cmd {
         PdfCommand::Merge(args) => handle_merge(args, plan_only, json_output),
@@ -177,6 +262,8 @@ pub fn handle_pdf_command(cmd: PdfCommand, plan_only: bool, json_output: bool) -
         PdfCommand::Linearize(args) => handle_linearize(args, plan_only, json_output),
         PdfCommand::Reorder(args) => handle_reorder(args, plan_only, json_output),
         PdfCommand::Extract(args) => handle_extract(args, plan_only, json_output),
+        PdfCommand::Ocr(args) => handle_ocr(args, plan_only, json_output),
+        PdfCommand::Metadata(args) => handle_metadata(args, plan_only, json_output),
     }
 }
 
@@ -469,6 +556,135 @@ fn handle_extract(args: ExtractArgs, plan_only: bool, json_output: bool) -> Resu
             forgekit_core::job::executor::execute_job_with_progress(&spec, false, &reporter)?;
         } else {
             let result = forgekit_core::job::executor::execute_job(&spec, false)?;
+            println!("{}", result);
+        }
+        Ok(())
+    }
+}
+
+fn handle_ocr(args: OcrArgs, plan_only: bool, json_output: bool) -> Result<()> {
+    let spec = JobSpec::PdfOcr {
+        input: args.input,
+        output: args.output,
+        language: args.language,
+        skip_text: args.skip_text,
+        deskew: args.deskew,
+        force_ocr: args.force_ocr,
+    };
+
+    if plan_only {
+        let plan = forgekit_core::job::executor::execute_job(&spec, true)?;
+        if json_output {
+            let event = forgekit_core::job::progress::ProgressEvent::Progress {
+                version: 1,
+                job_id: forgekit_core::job::progress::new_job_id(),
+                progress: forgekit_core::job::progress::ProgressInfo {
+                    current: 0,
+                    total: 1,
+                    percent: 0,
+                    stage: Some("plan".to_string()),
+                },
+                message: plan.clone(),
+            };
+            println!("{}", serde_json::to_string(&event).unwrap());
+        } else {
+            println!("{}", plan);
+        }
+        Ok(())
+    } else {
+        if json_output {
+            let reporter = forgekit_core::job::progress::JsonProgressReporter;
+            forgekit_core::job::executor::execute_job_with_progress(&spec, false, &reporter)?;
+        } else {
+            let result = forgekit_core::job::executor::execute_job(&spec, false)?;
+            println!("{}", result);
+        }
+        Ok(())
+    }
+}
+
+fn handle_metadata(args: MetadataArgs, plan_only: bool, json_output: bool) -> Result<()> {
+    // Determine the action based on arguments
+    let action = if !args.set_fields.is_empty() {
+        // Parse set fields (format: field=value)
+        let fields: Vec<(String, String)> = args
+            .set_fields
+            .iter()
+            .map(|s| {
+                let parts: Vec<&str> = s.splitn(2, '=').collect();
+                if parts.len() == 2 {
+                    Ok((parts[0].to_string(), parts[1].to_string()))
+                } else {
+                    Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                        path: PathBuf::new(),
+                        reason: format!("Invalid --set format: '{}'. Expected 'field=value'", s),
+                    })
+                }
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        MetadataAction::Set(fields)
+    } else if let Some(field) = args.get {
+        MetadataAction::Get(field)
+    } else {
+        MetadataAction::GetAll
+    };
+
+    // For set operations, output path is required
+    if matches!(&action, MetadataAction::Set(_)) && args.output.is_none() {
+        // Default to modifying in place
+        let spec = JobSpec::PdfMetadata {
+            input: args.input.clone(),
+            output: Some(args.input),
+            action,
+        };
+        return execute_metadata_job(&spec, plan_only, json_output);
+    }
+
+    let spec = JobSpec::PdfMetadata {
+        input: args.input,
+        output: args.output,
+        action,
+    };
+
+    execute_metadata_job(&spec, plan_only, json_output)
+}
+
+fn execute_metadata_job(spec: &JobSpec, plan_only: bool, json_output: bool) -> Result<()> {
+    if plan_only {
+        let plan = forgekit_core::job::executor::execute_job(spec, true)?;
+        if json_output {
+            let event = forgekit_core::job::progress::ProgressEvent::Progress {
+                version: 1,
+                job_id: forgekit_core::job::progress::new_job_id(),
+                progress: forgekit_core::job::progress::ProgressInfo {
+                    current: 0,
+                    total: 1,
+                    percent: 0,
+                    stage: Some("plan".to_string()),
+                },
+                message: plan.clone(),
+            };
+            println!("{}", serde_json::to_string(&event).unwrap());
+        } else {
+            println!("{}", plan);
+        }
+        Ok(())
+    } else {
+        let result = forgekit_core::job::executor::execute_job(spec, false)?;
+        if json_output {
+            // For metadata get operations, the result is already JSON or a value
+            // Wrap it in a complete event
+            let event = forgekit_core::job::progress::ProgressEvent::Complete {
+                version: 1,
+                job_id: forgekit_core::job::progress::new_job_id(),
+                result: forgekit_core::job::progress::JobResult {
+                    output: result.clone(),
+                    size_bytes: 0,
+                    duration_ms: 0,
+                },
+            };
+            println!("{}", serde_json::to_string(&event).unwrap());
+        } else {
             println!("{}", result);
         }
         Ok(())
