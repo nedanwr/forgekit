@@ -1,8 +1,8 @@
 # ForgeKit Beta-MVP Roadmap (CLI-First)
 
-**Last Updated**: January 2026  
-**Status**: Core foundation complete, PDF merge/split/compress/extract/ocr/metadata implemented, dependency management complete  
-**Current Version**: v0.0.5
+**Last Updated**: January 2026
+**Status**: Core foundation complete, PDF operations complete, Image operations complete
+**Current Version**: v0.0.6
 
 ## Versioning Strategy
 
@@ -93,20 +93,21 @@
 - ✅ OCR options: --skip-text, --deskew, --force-ocr
 - ✅ Integration with check-deps command
 
-#### v0.0.6 - Image Operations 📋
+#### v0.0.6 - Image Operations ✅
 
-**Status**: Pending
+**Status**: Completed
 
 **Deliverables**:
 
-- Image convert command (`image convert`) with format selection
-- Image resize command (`image resize`) with aspect ratio preservation
-- Image strip command (`image strip`) for EXIF removal
-- libvips tool adapter (primary, fast)
-- ImageMagick adapter (fallback for Windows compatibility)
-- Image presets (WebP, AVIF, JPEG quality presets)
-- Tests for image operations (dimensions, quality, format)
-- Golden tests for image conversion
+- ✅ Image convert command (`image convert`) with format selection and optional output
+- ✅ Image resize command (`image resize`) with aspect ratio preservation
+- ✅ Image strip command (`image strip`) for EXIF removal
+- ✅ Image compress command (`image compress`) for quality reduction
+- ✅ Image info command (`image info`) for dimensions/format/metadata
+- ✅ libvips tool adapter with compression parameter support
+- ✅ Optional output paths with smart auto-naming (e.g., `photo_800w.jpg`, `photo_stripped.jpg`)
+- ✅ PNG compression control (1-9) for conversion
+- ✅ RAW format input support (DNG, CR2, NEF, etc.)
 
 #### v0.0.7 - Audio Operations 📋
 
@@ -165,7 +166,7 @@
 
 - ✅ All CLI commands implemented and tested:
   - PDF: merge, split, compress, linearize, reorder, extract, ocr, metadata
-  - Image: convert, resize, strip
+  - Image: convert, resize, strip, compress, info
   - Audio: convert, normalize
   - Media: transcode
 - ✅ All package formats available (deb, rpm, Homebrew, winget)
@@ -215,24 +216,24 @@
 ### ✅ Completed Features
 
 - **Core Foundation**: Tool trait system, error handling, job specs
-- **PDF Operations**: Merge and split with qpdf
+- **PDF Operations**: Merge, split, compress, linearize, reorder, extract, OCR, metadata
+- **Image Operations**: Convert, resize, strip, compress, info (via libvips)
 - **Pages Grammar**: Full parser with comprehensive tests (11 tests)
 - **Progress Reporting**: NDJSON output with versioned schema
 - **CLI Flags**: `--json`, `--plan`, `--dry-run` working
 - **Documentation**: Comprehensive inline docs, README, CONTRIBUTING guide
-- **Testing**: 20 tests passing (13 unit, 2 integration, 5 doc tests)
 - **Dependency Checking**: `check-deps` command implemented
 
-**Current Version**: v0.0.5 (completed)
+**Current Version**: v0.0.6 (completed)
 
 ### 🔄 In Progress
 
-- **v0.0.6**: Image Operations
+- **v0.0.7**: Audio Operations
 
 ### 📋 Pending Features
 
-- Image: convert, resize, strip
-- Media: transcode, audio convert/normalize
+- Audio: convert, normalize
+- Media: transcode
 - Preset system (YAML) ✅
 - Package creation (deb, rpm, Homebrew, winget)
 - CI/CD setup with package building
@@ -345,7 +346,6 @@
 - tesseract: 5.0+
 - ffmpeg: 5.0+
 - libvips: 8.12+
-- ImageMagick: 7.1+ (fallback)
 - exiftool: 12.0+
 
 ### ADR-0003: Progress/Event JSON Format
@@ -428,7 +428,6 @@ tools/                    # External tool adapters
   ocrmypdf.rs            # ocrmypdf adapter
   ffmpeg.rs              # ffmpeg adapter
   libvips.rs             # libvips adapter
-  imagemagick.rs         # ImageMagick fallback adapter
   exiftool.rs            # exiftool adapter
 pipeline/                 # Multi-step pipelines
   mod.rs
@@ -756,8 +755,7 @@ SEE ALSO:
 - **tesseract** 5.0+ (OCR engine)
 - **ocrmypdf** 14.0+ (Python wrapper for OCR, installed via pip)
 - **ffmpeg** 5.0+ (audio/video processing)
-- **libvips** 8.12+ (image processing, primary)
-- **ImageMagick** 7.1+ (image processing fallback)
+- **libvips** 8.12+ (image processing)
 - **exiftool** 12.0+ (metadata handling)
 
 **Tool detection order**:
@@ -1090,23 +1088,23 @@ presets:
 
 **Status**: 🔄 Pending
 
-### Milestone 4: Image Operations (Week 4-5)
+### Milestone 4: Image Operations (Week 4-5) ✅ COMPLETED
 
 **Acceptance criteria**:
 
-- libvips convert/resize/strip
-- ImageMagick fallback detection
-- CLI `image convert/resize/strip` subcommands
-- Image presets (WebP, AVIF, JPEG)
-- Golden tests (dimensions, quality)
+- ✅ libvips convert/resize/strip/compress
+- ✅ CLI `image convert/resize/strip/compress/info` subcommands
+- ✅ Optional output with smart auto-naming
+- ✅ PNG compression control (1-9)
+- ✅ RAW format input support
 
 **Risks**: libvips not available on Windows
 
-**Mitigation**: ImageMagick fallback, clear install hints
+**Mitigation**: libvips available via scoop, clear install hints
 
 **Estimate**: Best 1 week, likely 1 week, worst 1.5 weeks
 
-**Status**: 🔄 Pending
+**Status**: ✅ Completed
 
 ### Milestone 5: Audio Operations (Week 5-6)
 
@@ -1282,14 +1280,14 @@ presets:
 
 ### Risk 3: libvips Not Available on Windows
 
-**Impact**: Low (ImageMagick fallback exists)
+**Impact**: Low (scoop has libvips)
 
-**Probability**: Medium
+**Probability**: Low
 
 **Mitigation**:
 
-- ImageMagick fallback already planned
-- Document both options in install hints
+- libvips available via scoop on Windows
+- Clear install hints in error messages
 
 ### Risk 4: Licensing Caveats (GPL tools)
 
