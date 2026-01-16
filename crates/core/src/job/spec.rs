@@ -277,6 +277,26 @@ pub enum JobSpec {
         /// Output audio file.
         output: PathBuf,
     },
+
+    // ========== Video Operations ==========
+
+    /// Transcode video to H.264 format.
+    ///
+    /// Uses ffmpeg with software x264 encoder. CRF controls quality (0-51, lower is better).
+    VideoTranscode {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// CRF quality (0-51, default 23). Lower = better quality, larger file.
+        crf: u8,
+        /// Encoder preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow).
+        preset: String,
+        /// Optional scale (width, height). Height of -1 preserves aspect ratio.
+        scale: Option<(i32, i32)>,
+        /// Copy audio stream instead of re-encoding.
+        copy_audio: bool,
+    },
 }
 
 impl JobSpec {
@@ -372,6 +392,20 @@ impl JobSpec {
                 }
             }
             JobSpec::AudioMono { .. } => "Convert audio to mono".to_string(),
+            JobSpec::VideoTranscode {
+                crf, scale, preset, ..
+            } => {
+                let scale_str = scale
+                    .map(|(w, h)| {
+                        if h == -1 {
+                            format!(" scaled to {}p", w)
+                        } else {
+                            format!(" scaled to {}x{}", w, h)
+                        }
+                    })
+                    .unwrap_or_default();
+                format!("Transcode video to H.264 (CRF {}, {}){}", crf, preset, scale_str)
+            }
         }
     }
 }
@@ -735,5 +769,55 @@ mod tests {
             output: PathBuf::from("mono.wav"),
         };
         assert_eq!(spec.description(), "Convert audio to mono");
+    }
+
+    // Video tests
+
+    #[test]
+    fn test_video_transcode_description() {
+        let spec = JobSpec::VideoTranscode {
+            input: PathBuf::from("video.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 23,
+            preset: "medium".to_string(),
+            scale: None,
+            copy_audio: true,
+        };
+        assert_eq!(
+            spec.description(),
+            "Transcode video to H.264 (CRF 23, medium)"
+        );
+    }
+
+    #[test]
+    fn test_video_transcode_with_scale_description() {
+        let spec = JobSpec::VideoTranscode {
+            input: PathBuf::from("video.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 20,
+            preset: "fast".to_string(),
+            scale: Some((1920, 1080)),
+            copy_audio: false,
+        };
+        assert_eq!(
+            spec.description(),
+            "Transcode video to H.264 (CRF 20, fast) scaled to 1920x1080"
+        );
+    }
+
+    #[test]
+    fn test_video_transcode_width_only_description() {
+        let spec = JobSpec::VideoTranscode {
+            input: PathBuf::from("video.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 23,
+            preset: "slow".to_string(),
+            scale: Some((1280, -1)),
+            copy_audio: true,
+        };
+        assert_eq!(
+            spec.description(),
+            "Transcode video to H.264 (CRF 23, slow) scaled to 1280p"
+        );
     }
 }
