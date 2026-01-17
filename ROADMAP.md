@@ -1,8 +1,8 @@
 # ForgeKit Beta-MVP Roadmap (CLI-First)
 
 **Last Updated**: January 2026
-**Status**: Core foundation complete, PDF operations complete, Image operations complete, Audio operations complete
-**Current Version**: v0.0.7
+**Status**: Core foundation complete, PDF operations complete, Image operations complete, Audio operations complete, Video operations complete
+**Current Version**: v0.0.8
 
 ## Versioning Strategy
 
@@ -123,20 +123,19 @@
 - ✅ Supported formats: MP3, AAC, Opus, FLAC, WAV, OGG, M4A
 - ✅ Tests for audio operations (12 new tests)
 
-#### v0.0.8 - Video Operations 📋
+#### v0.0.8 - Video Operations ✅
 
-**Status**: Pending
+**Status**: Completed
 
 **Deliverables**:
 
-- Media transcode command (`media transcode`) with preset support
-- ffmpeg video adapter (H.264 only, software x264)
-- Video preset (H.264 1080p with CRF 23)
-- Progress parsing from ffmpeg stderr (time= and Duration=)
-- CRF-based quality control (0-51 range)
-- Scale filter with aspect ratio preservation
-- Tests for video operations (duration, codec, resolution)
-- Golden tests for video transcoding
+- ✅ Media transcode command (`media transcode`) with preset support
+- ✅ ffmpeg video adapter (H.264 only, software x264)
+- ✅ CRF-based quality control (0-51 range, default 23)
+- ✅ Encoder preset support (ultrafast to veryslow)
+- ✅ Scale filter with aspect ratio preservation
+- ✅ Audio copy or re-encode option
+- ✅ Tests for video operations (7 new tests)
 
 #### v0.0.9 - Package Creation and CI/CD 📋
 
@@ -218,22 +217,22 @@
 - **Core Foundation**: Tool trait system, error handling, job specs
 - **PDF Operations**: Merge, split, compress, linearize, reorder, extract, OCR, metadata
 - **Image Operations**: Convert, resize, strip, compress, info (via libvips)
-- **Audio Operations**: Convert, normalize, info (via ffmpeg)
+- **Audio Operations**: Convert, normalize, extract, trim, join, volume, mono, info (via ffmpeg)
+- **Video Operations**: Transcode (H.264, CRF, presets, scale) (via ffmpeg)
 - **Pages Grammar**: Full parser with comprehensive tests (11 tests)
 - **Progress Reporting**: NDJSON output with versioned schema
 - **CLI Flags**: `--json`, `--plan`, `--dry-run` working
 - **Documentation**: Comprehensive inline docs, README, CONTRIBUTING guide
 - **Dependency Checking**: `check-deps` command implemented
 
-**Current Version**: v0.0.7 (completed)
+**Current Version**: v0.0.8 (completed)
 
 ### 🔄 In Progress
 
-- **v0.0.8**: Video Operations
+- **v0.0.9**: Package Creation and CI/CD
 
 ### 📋 Pending Features
 
-- Media: transcode
 - Preset system (YAML) ✅
 - Package creation (deb, rpm, Homebrew, winget)
 - CI/CD setup with package building

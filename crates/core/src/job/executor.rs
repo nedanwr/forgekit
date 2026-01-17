@@ -179,6 +179,55 @@ pub fn execute_job_with_progress(
             gain_db,
         } => execute_audio_volume(input, output, *gain_db, plan_only),
         JobSpec::AudioMono { input, output } => execute_audio_mono(input, output, plan_only),
+        JobSpec::VideoTranscode {
+            input,
+            output,
+            crf,
+            preset,
+            scale,
+            copy_audio,
+        } => execute_video_transcode(input, output, *crf, preset, *scale, *copy_audio, plan_only),
+        JobSpec::VideoTrim {
+            input,
+            output,
+            start,
+            end,
+        } => execute_video_trim(input, output, *start, *end, plan_only),
+        JobSpec::VideoJoin { inputs, output } => execute_video_join(inputs, output, plan_only),
+        JobSpec::VideoThumbnail {
+            input,
+            output,
+            timestamp,
+        } => execute_video_thumbnail(input, output, *timestamp, plan_only),
+        JobSpec::VideoConvert {
+            input,
+            output,
+            format,
+            start,
+            duration,
+            width,
+            fps,
+        } => execute_video_convert(
+            input, output, format, *start, *duration, *width, *fps, plan_only,
+        ),
+        JobSpec::VideoSpeed {
+            input,
+            output,
+            speed,
+        } => execute_video_speed(input, output, *speed, plan_only),
+        JobSpec::VideoRotate {
+            input,
+            output,
+            degrees,
+        } => execute_video_rotate(input, output, *degrees, plan_only),
+        JobSpec::VideoMute { input, output } => execute_video_mute(input, output, plan_only),
+        JobSpec::VideoStitch {
+            inputs,
+            output,
+            format,
+            fps,
+            width,
+        } => execute_video_stitch(inputs, output, format, *fps, *width, plan_only),
     }
 }
 
@@ -1450,6 +1499,325 @@ fn execute_audio_mono(input: &Path, output: &Path, plan_only: bool) -> Result<St
     ))
 }
 
+// ========== Video Operations ==========
+
+fn execute_video_transcode(
+    input: &Path,
+    output: &Path,
+    crf: u8,
+    preset: &str,
+    scale: Option<(i32, i32)>,
+    copy_audio: bool,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_transcode(
+            input, output, crf, preset, scale, copy_audio,
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.transcode(
+        &tool_info.path,
+        input,
+        output,
+        crf,
+        preset,
+        scale,
+        copy_audio,
+    )?;
+
+    let scale_str = scale
+        .map(|(w, h)| {
+            if h == -1 {
+                format!(" scaled to {}p", w)
+            } else {
+                format!(" scaled to {}x{}", w, h)
+            }
+        })
+        .unwrap_or_default();
+
+    Ok(format!(
+        "Successfully transcoded video to {} (H.264, CRF {}){}",
+        output.display(),
+        crf,
+        scale_str
+    ))
+}
+
+fn execute_video_trim(
+    input: &Path,
+    output: &Path,
+    start: Option<f64>,
+    end: Option<f64>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_trim(input, output, start, end));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_trim(&tool_info.path, input, output, start, end)?;
+
+    let time_str = match (start, end) {
+        (Some(s), Some(e)) => format!(" from {:.1}s to {:.1}s", s, e),
+        (Some(s), None) => format!(" from {:.1}s to end", s),
+        (None, Some(e)) => format!(" from start to {:.1}s", e),
+        (None, None) => String::new(),
+    };
+
+    Ok(format!("Successfully trimmed video{}", time_str))
+}
+
+fn execute_video_join(inputs: &[PathBuf], output: &Path, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_join(inputs, output));
+    }
+
+    if inputs.len() < 2 {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: format!("At least 2 files required for join, got {}", inputs.len()),
+        });
+    }
+
+    for input in inputs {
+        if !input.exists() {
+            return Err(ForgeKitError::InvalidInput {
+                path: input.clone(),
+                reason: "Input file does not exist".to_string(),
+            });
+        }
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_join(&tool_info.path, inputs, output)?;
+
+    Ok(format!(
+        "Successfully joined {} videos into {}",
+        inputs.len(),
+        output.display()
+    ))
+}
+
+fn execute_video_thumbnail(
+    input: &Path,
+    output: &Path,
+    timestamp: f64,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_thumbnail(input, output, timestamp));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_thumbnail(&tool_info.path, input, output, timestamp)?;
+
+    Ok(format!(
+        "Successfully extracted thumbnail at {:.1}s to {}",
+        timestamp,
+        output.display()
+    ))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn execute_video_convert(
+    input: &Path,
+    output: &Path,
+    format: &str,
+    start: Option<f64>,
+    duration: Option<f64>,
+    width: Option<u32>,
+    fps: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_convert(
+            input, output, format, start, duration, width, fps,
+        ));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_convert(
+        &tool_info.path,
+        input,
+        output,
+        format,
+        start,
+        duration,
+        width,
+        fps,
+    )?;
+
+    Ok(format!(
+        "Successfully converted video to {}: {}",
+        format.to_uppercase(),
+        output.display()
+    ))
+}
+
+fn execute_video_speed(input: &Path, output: &Path, speed: f64, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_speed(input, output, speed));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    if speed <= 0.0 {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Speed must be greater than 0".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_speed(&tool_info.path, input, output, speed)?;
+
+    Ok(format!(
+        "Successfully changed video speed to {:.1}x: {}",
+        speed,
+        output.display()
+    ))
+}
+
+fn execute_video_rotate(
+    input: &Path,
+    output: &Path,
+    degrees: u32,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_rotate(input, output, degrees));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    if degrees != 90 && degrees != 180 && degrees != 270 {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: format!("Invalid rotation angle {}. Use 90, 180, or 270.", degrees),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_rotate(&tool_info.path, input, output, degrees)?;
+
+    Ok(format!(
+        "Successfully rotated video {}°: {}",
+        degrees,
+        output.display()
+    ))
+}
+
+fn execute_video_mute(input: &Path, output: &Path, plan_only: bool) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_mute(input, output));
+    }
+
+    if !input.exists() {
+        return Err(ForgeKitError::InvalidInput {
+            path: input.to_path_buf(),
+            reason: "Input file does not exist".to_string(),
+        });
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_mute(&tool_info.path, input, output)?;
+
+    Ok(format!(
+        "Successfully removed audio from video: {}",
+        output.display()
+    ))
+}
+
+fn execute_video_stitch(
+    inputs: &[PathBuf],
+    output: &Path,
+    format: &str,
+    fps: u32,
+    width: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_stitch(
+            inputs, output, format, fps, width,
+        ));
+    }
+
+    if inputs.is_empty() {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "No input images provided".to_string(),
+        });
+    }
+
+    for input in inputs {
+        if !input.exists() {
+            return Err(ForgeKitError::InvalidInput {
+                path: input.clone(),
+                reason: "Input file does not exist".to_string(),
+            });
+        }
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_stitch(&tool_info.path, inputs, output, format, fps, width)?;
+
+    Ok(format!(
+        "Successfully stitched {} images into {}: {}",
+        inputs.len(),
+        format.to_uppercase(),
+        output.display()
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2147,5 +2515,67 @@ mod audio_operation_tests {
 
         assert!(result.contains("ffmpeg"));
         assert!(result.contains("-ac 1"));
+    }
+}
+
+#[cfg(test)]
+mod video_operation_tests {
+    use super::*;
+
+    #[test]
+    fn test_execute_video_transcode_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.mp4");
+
+        let result =
+            execute_video_transcode(&input, &output, 23, "medium", None, true, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-i video.mp4"));
+        assert!(result.contains("-c:v libx264"));
+        assert!(result.contains("-crf 23"));
+        assert!(result.contains("-preset medium"));
+        assert!(result.contains("-c:a copy"));
+    }
+
+    #[test]
+    fn test_execute_video_transcode_with_scale_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.mp4");
+
+        let result =
+            execute_video_transcode(&input, &output, 23, "fast", Some((1920, 1080)), true, true)
+                .unwrap();
+
+        assert!(result.contains("-vf scale=1920:1080"));
+    }
+
+    #[test]
+    fn test_execute_video_transcode_width_only_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.mp4");
+
+        // -1 height = preserve aspect ratio
+        let result =
+            execute_video_transcode(&input, &output, 20, "slow", Some((1280, -1)), false, true)
+                .unwrap();
+
+        assert!(result.contains("-vf scale=1280:-2")); // -2 ensures divisible by 2
+        assert!(result.contains("-c:a aac"));
+        assert!(result.contains("-b:a 128k"));
+    }
+
+    #[test]
+    fn test_execute_video_transcode_reencode_audio_plan() {
+        let input = PathBuf::from("video.mkv");
+        let output = PathBuf::from("output.mp4");
+
+        let result =
+            execute_video_transcode(&input, &output, 18, "fast", None, false, true).unwrap();
+
+        assert!(result.contains("-c:v libx264"));
+        assert!(result.contains("-crf 18"));
+        assert!(result.contains("-c:a aac"));
+        assert!(result.contains("-b:a 128k"));
     }
 }

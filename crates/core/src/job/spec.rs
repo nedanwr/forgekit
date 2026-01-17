@@ -277,6 +277,119 @@ pub enum JobSpec {
         /// Output audio file.
         output: PathBuf,
     },
+
+    // ========== Video Operations ==========
+    /// Transcode video to H.264 format.
+    ///
+    /// Uses ffmpeg with software x264 encoder. CRF controls quality (0-51, lower is better).
+    VideoTranscode {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// CRF quality (0-51, default 23). Lower = better quality, larger file.
+        crf: u8,
+        /// Encoder preset (ultrafast, superfast, veryfast, faster, fast, medium, slow, slower, veryslow).
+        preset: String,
+        /// Optional scale (width, height). Height of -1 preserves aspect ratio.
+        scale: Option<(i32, i32)>,
+        /// Copy audio stream instead of re-encoding.
+        copy_audio: bool,
+    },
+
+    /// Trim video to a specific time range.
+    ///
+    /// Uses ffmpeg with stream copy for fast trimming.
+    VideoTrim {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Start time in seconds (optional).
+        start: Option<f64>,
+        /// End time in seconds (optional).
+        end: Option<f64>,
+    },
+
+    /// Join multiple video files into one.
+    ///
+    /// Uses ffmpeg concat demuxer. All inputs must have same codec/resolution.
+    VideoJoin {
+        /// Input video files.
+        inputs: Vec<PathBuf>,
+        /// Output video file.
+        output: PathBuf,
+    },
+
+    /// Extract a thumbnail frame from video at a specific timestamp.
+    VideoThumbnail {
+        /// Input video file.
+        input: PathBuf,
+        /// Output image file (jpg, png).
+        output: PathBuf,
+        /// Timestamp in seconds to extract frame.
+        timestamp: f64,
+    },
+
+    /// Convert video to a different format/container.
+    VideoConvert {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Target format (gif, webm, mov, avi, etc.).
+        format: String,
+        /// Start time in seconds (optional, for gif).
+        start: Option<f64>,
+        /// Duration in seconds (optional, for gif).
+        duration: Option<f64>,
+        /// Output width (optional, for gif).
+        width: Option<u32>,
+        /// Frame rate (optional, for gif).
+        fps: Option<u32>,
+    },
+
+    /// Change video playback speed.
+    VideoSpeed {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Speed multiplier (0.5 = half speed, 2.0 = double speed).
+        speed: f64,
+    },
+
+    /// Rotate video by specified degrees.
+    VideoRotate {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file.
+        output: PathBuf,
+        /// Rotation angle: 90, 180, or 270 degrees clockwise.
+        degrees: u32,
+    },
+
+    /// Remove audio track from video.
+    VideoMute {
+        /// Input video file.
+        input: PathBuf,
+        /// Output video file (no audio).
+        output: PathBuf,
+    },
+
+    /// Stitch image sequence into video or GIF.
+    VideoStitch {
+        /// Input image files (sorted).
+        inputs: Vec<PathBuf>,
+        /// Output video or GIF file.
+        output: PathBuf,
+        /// Target format (gif, mp4, webm, etc.).
+        format: String,
+        /// Frame rate.
+        fps: u32,
+        /// Output width (optional, for gif).
+        width: Option<u32>,
+    },
 }
 
 impl JobSpec {
@@ -372,6 +485,58 @@ impl JobSpec {
                 }
             }
             JobSpec::AudioMono { .. } => "Convert audio to mono".to_string(),
+            JobSpec::VideoTranscode {
+                crf, scale, preset, ..
+            } => {
+                let scale_str = scale
+                    .map(|(w, h)| {
+                        if h == -1 {
+                            format!(" scaled to {}p", w)
+                        } else {
+                            format!(" scaled to {}x{}", w, h)
+                        }
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "Transcode video to H.264 (CRF {}, {}){}",
+                    crf, preset, scale_str
+                )
+            }
+            JobSpec::VideoTrim { start, end, .. } => match (start, end) {
+                (Some(s), Some(e)) => format!("Trim video from {:.1}s to {:.1}s", s, e),
+                (Some(s), None) => format!("Trim video from {:.1}s to end", s),
+                (None, Some(e)) => format!("Trim video from start to {:.1}s", e),
+                (None, None) => "Trim video".to_string(),
+            },
+            JobSpec::VideoJoin { inputs, .. } => {
+                format!("Join {} video files", inputs.len())
+            }
+            JobSpec::VideoThumbnail { timestamp, .. } => {
+                format!("Extract thumbnail at {:.1}s", timestamp)
+            }
+            JobSpec::VideoConvert { format, .. } => {
+                format!("Convert video to {}", format.to_uppercase())
+            }
+            JobSpec::VideoSpeed { speed, .. } => {
+                format!("Change video speed to {:.1}x", speed)
+            }
+            JobSpec::VideoRotate { degrees, .. } => {
+                format!("Rotate video {}°", degrees)
+            }
+            JobSpec::VideoMute { .. } => "Remove audio from video".to_string(),
+            JobSpec::VideoStitch {
+                inputs,
+                format,
+                fps,
+                ..
+            } => {
+                format!(
+                    "Stitch {} images into {} at {} fps",
+                    inputs.len(),
+                    format.to_uppercase(),
+                    fps
+                )
+            }
         }
     }
 }
@@ -735,5 +900,55 @@ mod tests {
             output: PathBuf::from("mono.wav"),
         };
         assert_eq!(spec.description(), "Convert audio to mono");
+    }
+
+    // Video tests
+
+    #[test]
+    fn test_video_transcode_description() {
+        let spec = JobSpec::VideoTranscode {
+            input: PathBuf::from("video.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 23,
+            preset: "medium".to_string(),
+            scale: None,
+            copy_audio: true,
+        };
+        assert_eq!(
+            spec.description(),
+            "Transcode video to H.264 (CRF 23, medium)"
+        );
+    }
+
+    #[test]
+    fn test_video_transcode_with_scale_description() {
+        let spec = JobSpec::VideoTranscode {
+            input: PathBuf::from("video.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 20,
+            preset: "fast".to_string(),
+            scale: Some((1920, 1080)),
+            copy_audio: false,
+        };
+        assert_eq!(
+            spec.description(),
+            "Transcode video to H.264 (CRF 20, fast) scaled to 1920x1080"
+        );
+    }
+
+    #[test]
+    fn test_video_transcode_width_only_description() {
+        let spec = JobSpec::VideoTranscode {
+            input: PathBuf::from("video.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 23,
+            preset: "slow".to_string(),
+            scale: Some((1280, -1)),
+            copy_audio: true,
+        };
+        assert_eq!(
+            spec.description(),
+            "Transcode video to H.264 (CRF 23, slow) scaled to 1280p"
+        );
     }
 }
