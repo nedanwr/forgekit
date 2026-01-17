@@ -102,6 +102,17 @@ pub enum VideoCommand {
     ///
     /// Creates a video file with no audio stream.
     Mute(MuteArgs),
+
+    /// Stitch image sequence into video or GIF
+    ///
+    /// Examples:
+    ///   forgekit video stitch "frame_*.png" -t mp4 --fps 24 --output animation.mp4
+    ///   forgekit video stitch "render_*.exr" -t mp4 --fps 30 --output video.mp4
+    ///   forgekit video stitch "img_*.jpg" -t gif --fps 10 --output animation.gif
+    ///
+    /// Supports glob patterns. Files are sorted naturally (frame_2 before frame_10).
+    /// Useful for Blender renders, timelapses, and stop-motion.
+    Stitch(StitchArgs),
 }
 
 #[derive(Args, Clone)]
@@ -273,6 +284,29 @@ pub struct MuteArgs {
     pub output: PathBuf,
 }
 
+#[derive(Args, Clone)]
+pub struct StitchArgs {
+    /// Input images (glob pattern like "frame_*.png")
+    #[arg(required = true, num_args = 1.., help = "Input images or glob pattern")]
+    pub inputs: Vec<String>,
+
+    /// Output video or GIF file
+    #[arg(short, long, required = true, help = "Output file")]
+    pub output: PathBuf,
+
+    /// Target format (mp4, gif, webm, mov)
+    #[arg(short = 't', long = "to", required = true, help = "Target format (mp4, gif, webm)")]
+    pub format: String,
+
+    /// Frame rate
+    #[arg(short, long, required = true, help = "Frame rate (e.g., 24, 30, 60)")]
+    pub fps: u32,
+
+    /// Output width - for GIF only (height auto-calculated)
+    #[arg(short, long, help = "Width for GIF (height auto-calculated)")]
+    pub width: Option<u32>,
+}
+
 pub fn handle_video_command(cmd: &VideoCommand, plan_only: bool, json_output: bool) -> Result<()> {
     match cmd {
         VideoCommand::Transcode(args) => handle_transcode(args, plan_only),
@@ -284,6 +318,7 @@ pub fn handle_video_command(cmd: &VideoCommand, plan_only: bool, json_output: bo
         VideoCommand::Speed(args) => handle_speed(args, plan_only),
         VideoCommand::Rotate(args) => handle_rotate(args, plan_only),
         VideoCommand::Mute(args) => handle_mute(args, plan_only),
+        VideoCommand::Stitch(args) => handle_stitch(args, plan_only),
     }
 }
 
@@ -740,6 +775,73 @@ fn handle_mute(args: &MuteArgs, plan_only: bool) -> Result<()> {
     let spec = JobSpec::VideoMute {
         input: args.input.clone(),
         output: args.output.clone(),
+    };
+
+    let result = execute_job(&spec, plan_only)?;
+    println!("{}", result);
+    Ok(())
+}
+
+fn handle_stitch(args: &StitchArgs, plan_only: bool) -> Result<()> {
+    // Expand glob patterns and collect files
+    let mut files: Vec<PathBuf> = Vec::new();
+
+    for input in &args.inputs {
+        // Check if input contains glob characters
+        if input.contains('*') || input.contains('?') || input.contains('[') {
+            let paths = glob::glob(input).map_err(|e| {
+                forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                    path: PathBuf::from(input),
+                    reason: format!("Invalid glob pattern: {}", e),
+                }
+            })?;
+
+            for entry in paths {
+                match entry {
+                    Ok(path) => files.push(path),
+                    Err(e) => {
+                        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+                            path: PathBuf::new(),
+                            reason: format!("Glob error: {}", e),
+                        });
+                    }
+                }
+            }
+        } else {
+            files.push(PathBuf::from(input));
+        }
+    }
+
+    // Sort files naturally (so frame_2 comes before frame_10)
+    files.sort_by_key(|a| natural_sort_key(a));
+
+    if files.is_empty() {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "No matching files found".to_string(),
+        });
+    }
+
+    // Validate format
+    let format = args.format.to_lowercase();
+    let valid_formats = ["gif", "mp4", "webm", "mov", "avi", "mkv"];
+    if !valid_formats.contains(&format.as_str()) {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: format!(
+                "Invalid format '{}'. Supported: {}",
+                args.format,
+                valid_formats.join(", ")
+            ),
+        });
+    }
+
+    let spec = JobSpec::VideoStitch {
+        inputs: files,
+        output: args.output.clone(),
+        format,
+        fps: args.fps,
+        width: args.width,
     };
 
     let result = execute_job(&spec, plan_only)?;
