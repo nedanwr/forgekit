@@ -2584,8 +2584,7 @@ mod video_operation_tests {
         let input = PathBuf::from("video.mp4");
         let output = PathBuf::from("clip.mp4");
 
-        let result =
-            execute_video_trim(&input, &output, Some(30.0), Some(60.0), true).unwrap();
+        let result = execute_video_trim(&input, &output, Some(30.0), Some(60.0), true).unwrap();
 
         assert!(result.contains("ffmpeg"));
         assert!(result.contains("-ss 30"));
@@ -2618,10 +2617,7 @@ mod video_operation_tests {
 
     #[test]
     fn test_execute_video_join_plan() {
-        let inputs = vec![
-            PathBuf::from("part1.mp4"),
-            PathBuf::from("part2.mp4"),
-        ];
+        let inputs = vec![PathBuf::from("part1.mp4"), PathBuf::from("part2.mp4")];
         let output = PathBuf::from("full.mp4");
 
         let result = execute_video_join(&inputs, &output, true).unwrap();
@@ -2649,8 +2645,16 @@ mod video_operation_tests {
         let output = PathBuf::from("output.gif");
 
         let result = execute_video_convert(
-            &input, &output, "gif", None, None, Some(480), Some(10), true
-        ).unwrap();
+            &input,
+            &output,
+            "gif",
+            None,
+            None,
+            Some(480),
+            Some(10),
+            true,
+        )
+        .unwrap();
 
         assert!(result.contains("ffmpeg"));
         assert!(result.contains("palettegen"));
@@ -2663,9 +2667,8 @@ mod video_operation_tests {
         let input = PathBuf::from("video.mp4");
         let output = PathBuf::from("output.webm");
 
-        let result = execute_video_convert(
-            &input, &output, "webm", None, None, None, None, true
-        ).unwrap();
+        let result =
+            execute_video_convert(&input, &output, "webm", None, None, None, None, true).unwrap();
 
         assert!(result.contains("ffmpeg"));
         assert!(result.contains("-c copy"));
@@ -2743,10 +2746,7 @@ mod video_operation_tests {
 
     #[test]
     fn test_execute_video_stitch_mp4_plan() {
-        let inputs = vec![
-            PathBuf::from("frame1.png"),
-            PathBuf::from("frame2.png"),
-        ];
+        let inputs = vec![PathBuf::from("frame1.png"), PathBuf::from("frame2.png")];
         let output = PathBuf::from("video.mp4");
 
         let result = execute_video_stitch(&inputs, &output, "mp4", 24, None, true).unwrap();
@@ -2758,10 +2758,7 @@ mod video_operation_tests {
 
     #[test]
     fn test_execute_video_stitch_gif_plan() {
-        let inputs = vec![
-            PathBuf::from("frame1.png"),
-            PathBuf::from("frame2.png"),
-        ];
+        let inputs = vec![PathBuf::from("frame1.png"), PathBuf::from("frame2.png")];
         let output = PathBuf::from("anim.gif");
 
         let result = execute_video_stitch(&inputs, &output, "gif", 10, Some(480), true).unwrap();

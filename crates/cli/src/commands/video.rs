@@ -1051,7 +1051,9 @@ mod tests {
             // Will fail because input doesn't exist, but validation passes
             let result = handle_rotate(&args, true);
             // In plan mode, it should generate a plan (may fail due to missing file)
-            assert!(result.is_ok() || !result.unwrap_err().to_string().contains("Invalid rotation"));
+            assert!(
+                result.is_ok() || !result.unwrap_err().to_string().contains("Invalid rotation")
+            );
         }
     }
 
