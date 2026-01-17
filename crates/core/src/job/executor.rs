@@ -2578,4 +2578,197 @@ mod video_operation_tests {
         assert!(result.contains("-c:a aac"));
         assert!(result.contains("-b:a 128k"));
     }
+
+    #[test]
+    fn test_execute_video_trim_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("clip.mp4");
+
+        let result =
+            execute_video_trim(&input, &output, Some(30.0), Some(60.0), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-ss 30"));
+        // When both start and end are specified, duration (-t) is used, not -to
+        assert!(result.contains("-t 30")); // duration = end - start = 60 - 30 = 30
+        assert!(result.contains("-c copy"));
+    }
+
+    #[test]
+    fn test_execute_video_trim_start_only_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("clip.mp4");
+
+        let result = execute_video_trim(&input, &output, Some(120.0), None, true).unwrap();
+
+        assert!(result.contains("-ss 120"));
+        assert!(!result.contains("-to"));
+    }
+
+    #[test]
+    fn test_execute_video_trim_end_only_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("clip.mp4");
+
+        let result = execute_video_trim(&input, &output, None, Some(60.0), true).unwrap();
+
+        assert!(result.contains("-to 60"));
+        assert!(!result.contains("-ss"));
+    }
+
+    #[test]
+    fn test_execute_video_join_plan() {
+        let inputs = vec![
+            PathBuf::from("part1.mp4"),
+            PathBuf::from("part2.mp4"),
+        ];
+        let output = PathBuf::from("full.mp4");
+
+        let result = execute_video_join(&inputs, &output, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-f concat"));
+        assert!(result.contains("-c copy"));
+    }
+
+    #[test]
+    fn test_execute_video_thumbnail_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("thumb.jpg");
+
+        let result = execute_video_thumbnail(&input, &output, 5.0, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-ss 5"));
+        assert!(result.contains("-frames:v 1"));
+    }
+
+    #[test]
+    fn test_execute_video_convert_gif_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.gif");
+
+        let result = execute_video_convert(
+            &input, &output, "gif", None, None, Some(480), Some(10), true
+        ).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("palettegen"));
+        assert!(result.contains("paletteuse"));
+        assert!(result.contains("scale=480"));
+    }
+
+    #[test]
+    fn test_execute_video_convert_webm_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("output.webm");
+
+        let result = execute_video_convert(
+            &input, &output, "webm", None, None, None, None, true
+        ).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-c copy"));
+    }
+
+    #[test]
+    fn test_execute_video_speed_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("fast.mp4");
+
+        let result = execute_video_speed(&input, &output, 2.0, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("setpts=PTS/2"));
+        assert!(result.contains("atempo=2"));
+    }
+
+    #[test]
+    fn test_execute_video_speed_slow_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("slow.mp4");
+
+        let result = execute_video_speed(&input, &output, 0.5, true).unwrap();
+
+        assert!(result.contains("setpts=PTS/0.5"));
+        assert!(result.contains("atempo=0.5"));
+    }
+
+    #[test]
+    fn test_execute_video_rotate_90_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("rotated.mp4");
+
+        let result = execute_video_rotate(&input, &output, 90, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("transpose=1"));
+    }
+
+    #[test]
+    fn test_execute_video_rotate_180_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("rotated.mp4");
+
+        let result = execute_video_rotate(&input, &output, 180, true).unwrap();
+
+        assert!(result.contains("transpose=1,transpose=1"));
+    }
+
+    #[test]
+    fn test_execute_video_rotate_270_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("rotated.mp4");
+
+        let result = execute_video_rotate(&input, &output, 270, true).unwrap();
+
+        assert!(result.contains("transpose=2"));
+    }
+
+    // Note: Invalid rotation angle validation only happens during actual execution,
+    // not in plan mode. The plan function generates output for any angle.
+    // Validation is handled at the CLI layer for plan mode.
+
+    #[test]
+    fn test_execute_video_mute_plan() {
+        let input = PathBuf::from("video.mp4");
+        let output = PathBuf::from("silent.mp4");
+
+        let result = execute_video_mute(&input, &output, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-an"));
+        assert!(result.contains("-c:v copy"));
+    }
+
+    #[test]
+    fn test_execute_video_stitch_mp4_plan() {
+        let inputs = vec![
+            PathBuf::from("frame1.png"),
+            PathBuf::from("frame2.png"),
+        ];
+        let output = PathBuf::from("video.mp4");
+
+        let result = execute_video_stitch(&inputs, &output, "mp4", 24, None, true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("-f concat"));
+        assert!(result.contains("-r 24"));
+    }
+
+    #[test]
+    fn test_execute_video_stitch_gif_plan() {
+        let inputs = vec![
+            PathBuf::from("frame1.png"),
+            PathBuf::from("frame2.png"),
+        ];
+        let output = PathBuf::from("anim.gif");
+
+        let result = execute_video_stitch(&inputs, &output, "gif", 10, Some(480), true).unwrap();
+
+        assert!(result.contains("ffmpeg"));
+        assert!(result.contains("palettegen"));
+        assert!(result.contains("paletteuse"));
+        assert!(result.contains("scale=480"));
+    }
 }
