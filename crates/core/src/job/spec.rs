@@ -377,6 +377,20 @@ pub enum JobSpec {
         /// Output video file (no audio).
         output: PathBuf,
     },
+
+    /// Stitch image sequence into video or GIF.
+    VideoStitch {
+        /// Input image files (sorted).
+        inputs: Vec<PathBuf>,
+        /// Output video or GIF file.
+        output: PathBuf,
+        /// Target format (gif, mp4, webm, etc.).
+        format: String,
+        /// Frame rate.
+        fps: u32,
+        /// Output width (optional, for gif).
+        width: Option<u32>,
+    },
 }
 
 impl JobSpec {
@@ -508,6 +522,19 @@ impl JobSpec {
                 format!("Rotate video {}°", degrees)
             }
             JobSpec::VideoMute { .. } => "Remove audio from video".to_string(),
+            JobSpec::VideoStitch {
+                inputs,
+                format,
+                fps,
+                ..
+            } => {
+                format!(
+                    "Stitch {} images into {} at {} fps",
+                    inputs.len(),
+                    format.to_uppercase(),
+                    fps
+                )
+            }
         }
     }
 }
