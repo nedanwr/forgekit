@@ -144,3 +144,108 @@ impl ForgeKitError {
 
 /// Result type alias
 pub type Result<T> = std::result::Result<T, ForgeKitError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exit_code_tool_not_found() {
+        let err = ForgeKitError::ToolNotFound {
+            tool: "qpdf".to_string(),
+            hint: "Install with brew install qpdf".to_string(),
+        };
+        assert_eq!(err.exit_code(), ExitCode::MissingTool);
+        assert_eq!(i32::from(err.exit_code()), 2);
+    }
+
+    #[test]
+    fn test_exit_code_invalid_input() {
+        let err = ForgeKitError::InvalidInput {
+            path: PathBuf::from("test.pdf"),
+            reason: "File not found".to_string(),
+        };
+        assert_eq!(err.exit_code(), ExitCode::InvalidInput);
+        assert_eq!(i32::from(err.exit_code()), 3);
+    }
+
+    #[test]
+    fn test_exit_code_permission_denied() {
+        let err = ForgeKitError::PermissionDenied {
+            path: PathBuf::from("/root/file"),
+        };
+        assert_eq!(err.exit_code(), ExitCode::PermissionDenied);
+        assert_eq!(i32::from(err.exit_code()), 4);
+    }
+
+    #[test]
+    fn test_exit_code_disk_full() {
+        let err = ForgeKitError::DiskFull {
+            path: PathBuf::from("/output.pdf"),
+        };
+        assert_eq!(err.exit_code(), ExitCode::DiskFull);
+        assert_eq!(i32::from(err.exit_code()), 5);
+    }
+
+    #[test]
+    fn test_exit_code_cancelled() {
+        let err = ForgeKitError::Cancelled;
+        assert_eq!(err.exit_code(), ExitCode::Cancelled);
+        assert_eq!(i32::from(err.exit_code()), 130);
+    }
+
+    #[test]
+    fn test_exit_code_processing_failed() {
+        let err = ForgeKitError::ProcessingFailed {
+            tool: "ffmpeg".to_string(),
+            stderr: "Error encoding video".to_string(),
+        };
+        assert_eq!(err.exit_code(), ExitCode::GeneralError);
+        assert_eq!(i32::from(err.exit_code()), 1);
+    }
+
+    #[test]
+    fn test_exit_code_tool_version_mismatch() {
+        let err = ForgeKitError::ToolVersionMismatch {
+            tool: "qpdf".to_string(),
+            required: "11.0".to_string(),
+            found: "10.0".to_string(),
+        };
+        assert_eq!(err.exit_code(), ExitCode::GeneralError);
+        assert_eq!(i32::from(err.exit_code()), 1);
+    }
+
+    #[test]
+    fn test_error_display_tool_not_found() {
+        let err = ForgeKitError::ToolNotFound {
+            tool: "qpdf".to_string(),
+            hint: "Install with brew install qpdf".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("qpdf"));
+        assert!(msg.contains("not found"));
+        assert!(msg.contains("brew install qpdf"));
+    }
+
+    #[test]
+    fn test_error_display_invalid_input() {
+        let err = ForgeKitError::InvalidInput {
+            path: PathBuf::from("missing.pdf"),
+            reason: "File does not exist".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("missing.pdf"));
+        assert!(msg.contains("File does not exist"));
+    }
+
+    #[test]
+    fn test_error_display_processing_failed() {
+        let err = ForgeKitError::ProcessingFailed {
+            tool: "ffmpeg".to_string(),
+            stderr: "Invalid codec".to_string(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("ffmpeg"));
+        assert!(msg.contains("Invalid codec"));
+    }
+}

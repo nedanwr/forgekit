@@ -741,3 +741,173 @@ fn format_duration(seconds: f64) -> String {
         format!("{}:{:02}", minutes, secs)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Time parsing tests
+    #[test]
+    fn test_parse_time_seconds() {
+        assert_eq!(parse_time("30").unwrap(), 30.0);
+        assert_eq!(parse_time("90.5").unwrap(), 90.5);
+        assert_eq!(parse_time("0").unwrap(), 0.0);
+    }
+
+    #[test]
+    fn test_parse_time_mm_ss() {
+        assert_eq!(parse_time("1:30").unwrap(), 90.0);
+        assert_eq!(parse_time("2:00").unwrap(), 120.0);
+        assert_eq!(parse_time("0:45").unwrap(), 45.0);
+    }
+
+    #[test]
+    fn test_parse_time_hh_mm_ss() {
+        assert_eq!(parse_time("1:30:00").unwrap(), 5400.0);
+        assert_eq!(parse_time("0:01:30").unwrap(), 90.0);
+        assert_eq!(parse_time("2:00:00").unwrap(), 7200.0);
+    }
+
+    #[test]
+    fn test_parse_time_invalid() {
+        assert!(parse_time("invalid").is_err());
+        assert!(parse_time("1:2:3:4").is_err());
+        assert!(parse_time("abc:def").is_err());
+    }
+
+    // Gain parsing tests
+    #[test]
+    fn test_parse_gain_positive() {
+        assert_eq!(parse_gain("+6").unwrap(), 6.0);
+        assert_eq!(parse_gain("6").unwrap(), 6.0);
+        assert_eq!(parse_gain("6dB").unwrap(), 6.0);
+        assert_eq!(parse_gain("+6dB").unwrap(), 6.0);
+    }
+
+    #[test]
+    fn test_parse_gain_negative() {
+        assert_eq!(parse_gain("-3").unwrap(), -3.0);
+        assert_eq!(parse_gain("-3dB").unwrap(), -3.0);
+        assert_eq!(parse_gain("-10db").unwrap(), -10.0);
+    }
+
+    #[test]
+    fn test_parse_gain_invalid() {
+        assert!(parse_gain("invalid").is_err());
+        assert!(parse_gain("abc").is_err());
+    }
+
+    // Duration formatting tests
+    #[test]
+    fn test_format_duration_minutes() {
+        assert_eq!(format_duration(90.0), "1:30");
+        assert_eq!(format_duration(0.0), "0:00");
+        assert_eq!(format_duration(59.0), "0:59");
+    }
+
+    #[test]
+    fn test_format_duration_hours() {
+        assert_eq!(format_duration(3600.0), "1:00:00");
+        assert_eq!(format_duration(5400.0), "1:30:00");
+        assert_eq!(format_duration(7265.0), "2:01:05");
+    }
+
+    // Validation tests
+    #[test]
+    fn test_convert_requires_output_or_to() {
+        let args = ConvertArgs {
+            input: PathBuf::from("input.wav"),
+            output: None,
+            to: None,
+            bitrate: None,
+        };
+        let result = handle_convert(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Either --output or --to is required"));
+    }
+
+    #[test]
+    fn test_convert_invalid_format() {
+        let args = ConvertArgs {
+            input: PathBuf::from("input.wav"),
+            output: None,
+            to: Some("invalid".to_string()),
+            bitrate: None,
+        };
+        let result = handle_convert(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Unknown format"));
+    }
+
+    #[test]
+    fn test_normalize_invalid_target() {
+        let args = NormalizeArgs {
+            input: PathBuf::from("input.wav"),
+            output: None,
+            target: "invalid_target".to_string(),
+            lufs: None,
+        };
+        let result = handle_normalize(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Unknown target"));
+    }
+
+    #[test]
+    fn test_normalize_valid_targets() {
+        for target in ["ebu-r128", "ebu", "broadcast", "streaming", "stream"] {
+            let args = NormalizeArgs {
+                input: PathBuf::from("input.wav"),
+                output: Some(PathBuf::from("output.wav")),
+                target: target.to_string(),
+                lufs: None,
+            };
+            let result = handle_normalize(&args, true);
+            // Should not fail on target validation
+            assert!(result.is_ok() || !result.unwrap_err().to_string().contains("Unknown target"));
+        }
+    }
+
+    #[test]
+    fn test_normalize_custom_lufs() {
+        let args = NormalizeArgs {
+            input: PathBuf::from("input.wav"),
+            output: Some(PathBuf::from("output.wav")),
+            target: "ebu-r128".to_string(), // ignored when lufs is set
+            lufs: Some(-16.0),
+        };
+        let result = handle_normalize(&args, true);
+        // Custom LUFS should work
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("Unknown target"));
+    }
+
+    #[test]
+    fn test_trim_requires_start_or_end() {
+        let args = TrimArgs {
+            input: PathBuf::from("input.mp3"),
+            output: PathBuf::from("output.mp3"),
+            start: None,
+            end: None,
+        };
+        let result = handle_trim(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("At least one of --start or --end"));
+    }
+
+    #[test]
+    fn test_extract_requires_output_or_to() {
+        let args = ExtractArgs {
+            input: PathBuf::from("video.mp4"),
+            output: None,
+            to: None,
+            bitrate: None,
+        };
+        let result = handle_extract(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Either --output or --to is required"));
+    }
+}

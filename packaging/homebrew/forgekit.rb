@@ -4,8 +4,8 @@
 
 class Forgekit < Formula
   desc "Local-first media and PDF toolkit"
-  homepage "https://github.com/nedanwar/forgekit"
-  url "https://github.com/nedanwar/forgekit/releases/download/v0.0.3/forgekit-0.0.3.tar.gz"
+  homepage "https://github.com/nedanwr/forgekit"
+  url "https://github.com/nedanwr/forgekit/releases/download/v0.0.9/forgekit-0.0.9-x86_64-apple-darwin.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
 

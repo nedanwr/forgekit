@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>forgekit</id>
+    <version>0.0.9</version>
+    <title>ForgeKit</title>
+    <authors>ForgeKit Contributors</authors>
+    <owners>ForgeKit Contributors</owners>
+    <licenseUrl>https://opensource.org/licenses/MIT</licenseUrl>
+    <projectUrl>https://github.com/nedanwr/forgekit</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Local-first media and PDF toolkit. Fast, privacy-focused CLI for PDF, image, audio, and video operations. All processing runs locally - no data leaves your device.</description>
+    <summary>CLI toolkit for PDF, image, audio, and video operations</summary>
+    <tags>pdf media cli video audio image toolkit ffmpeg</tags>
+
+    <!-- Dependencies - Chocolatey auto-installs these -->
+    <dependencies>
+      <dependency id="qpdf" />
+      <dependency id="ghostscript" />
+      <dependency id="tesseract" />
+      <dependency id="ffmpeg" />
+      <dependency id="python3" />
+      <dependency id="exiftool" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

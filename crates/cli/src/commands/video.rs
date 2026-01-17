@@ -892,3 +892,231 @@ fn handle_stitch(args: &StitchArgs, plan_only: bool) -> Result<()> {
     println!("{}", result);
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Time parsing tests
+    #[test]
+    fn test_parse_time_seconds() {
+        assert_eq!(parse_time("30").unwrap(), 30.0);
+        assert_eq!(parse_time("90.5").unwrap(), 90.5);
+        assert_eq!(parse_time("0").unwrap(), 0.0);
+    }
+
+    #[test]
+    fn test_parse_time_mm_ss() {
+        assert_eq!(parse_time("1:30").unwrap(), 90.0);
+        assert_eq!(parse_time("2:00").unwrap(), 120.0);
+        assert_eq!(parse_time("0:45").unwrap(), 45.0);
+    }
+
+    #[test]
+    fn test_parse_time_hh_mm_ss() {
+        assert_eq!(parse_time("1:30:00").unwrap(), 5400.0);
+        assert_eq!(parse_time("0:01:30").unwrap(), 90.0);
+        assert_eq!(parse_time("2:00:00").unwrap(), 7200.0);
+    }
+
+    #[test]
+    fn test_parse_time_invalid() {
+        assert!(parse_time("invalid").is_err());
+        assert!(parse_time("1:2:3:4").is_err());
+        assert!(parse_time("abc:def").is_err());
+    }
+
+    // Duration formatting tests
+    #[test]
+    fn test_format_duration_minutes() {
+        assert_eq!(format_duration(90.0), "1:30");
+        assert_eq!(format_duration(0.0), "0:00");
+        assert_eq!(format_duration(59.0), "0:59");
+    }
+
+    #[test]
+    fn test_format_duration_hours() {
+        assert_eq!(format_duration(3600.0), "1:00:00");
+        assert_eq!(format_duration(5400.0), "1:30:00");
+        assert_eq!(format_duration(7265.0), "2:01:05");
+    }
+
+    // Natural sorting tests
+    #[test]
+    fn test_natural_sort_key_numbers() {
+        let mut files = [
+            PathBuf::from("frame_10.png"),
+            PathBuf::from("frame_2.png"),
+            PathBuf::from("frame_1.png"),
+        ];
+        files.sort_by_key(|a| natural_sort_key(a));
+        assert_eq!(files[0], PathBuf::from("frame_1.png"));
+        assert_eq!(files[1], PathBuf::from("frame_2.png"));
+        assert_eq!(files[2], PathBuf::from("frame_10.png"));
+    }
+
+    #[test]
+    fn test_natural_sort_key_mixed() {
+        let mut files = [
+            PathBuf::from("part_100.mp4"),
+            PathBuf::from("part_20.mp4"),
+            PathBuf::from("part_3.mp4"),
+        ];
+        files.sort_by_key(|a| natural_sort_key(a));
+        assert_eq!(files[0], PathBuf::from("part_3.mp4"));
+        assert_eq!(files[1], PathBuf::from("part_20.mp4"));
+        assert_eq!(files[2], PathBuf::from("part_100.mp4"));
+    }
+
+    // Validation tests
+    #[test]
+    fn test_transcode_crf_validation() {
+        let args = TranscodeArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 52, // Invalid - max is 51
+            preset: "medium".to_string(),
+            scale: None,
+            reencode_audio: false,
+        };
+        let result = handle_transcode(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("CRF must be 0-51"));
+    }
+
+    #[test]
+    fn test_transcode_preset_validation() {
+        let args = TranscodeArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            crf: 23,
+            preset: "invalid_preset".to_string(),
+            scale: None,
+            reencode_audio: false,
+        };
+        let result = handle_transcode(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid preset"));
+    }
+
+    #[test]
+    fn test_trim_requires_start_or_end() {
+        let args = TrimArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            start: None,
+            end: None,
+        };
+        let result = handle_trim(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("At least one of --start or --end"));
+    }
+
+    #[test]
+    fn test_speed_must_be_positive() {
+        let args = SpeedArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            speed: 0.0,
+        };
+        let result = handle_speed(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Speed must be greater than 0"));
+    }
+
+    #[test]
+    fn test_speed_negative() {
+        let args = SpeedArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            speed: -1.0,
+        };
+        let result = handle_speed(&args, true);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rotate_valid_angles() {
+        // 90, 180, 270 are valid
+        for angle in [90, 180, 270] {
+            let args = RotateArgs {
+                input: PathBuf::from("input.mp4"),
+                output: PathBuf::from("output.mp4"),
+                degrees: angle,
+            };
+            // Will fail because input doesn't exist, but validation passes
+            let result = handle_rotate(&args, true);
+            // In plan mode, it should generate a plan (may fail due to missing file)
+            assert!(
+                result.is_ok() || !result.unwrap_err().to_string().contains("Invalid rotation")
+            );
+        }
+    }
+
+    #[test]
+    fn test_rotate_invalid_angle() {
+        let args = RotateArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            degrees: 45, // Invalid
+        };
+        let result = handle_rotate(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid rotation angle"));
+    }
+
+    #[test]
+    fn test_convert_valid_formats() {
+        for format in ["gif", "webm", "mp4", "mov", "avi", "mkv"] {
+            let args = ConvertArgs {
+                input: PathBuf::from("input.mp4"),
+                output: PathBuf::from("output.mp4"),
+                format: format.to_string(),
+                start: None,
+                duration: None,
+                width: None,
+                fps: None,
+            };
+            let result = handle_convert(&args, true);
+            // Should not fail on format validation
+            assert!(result.is_ok() || !result.unwrap_err().to_string().contains("Invalid format"));
+        }
+    }
+
+    #[test]
+    fn test_convert_invalid_format() {
+        let args = ConvertArgs {
+            input: PathBuf::from("input.mp4"),
+            output: PathBuf::from("output.mp4"),
+            format: "invalid".to_string(),
+            start: None,
+            duration: None,
+            width: None,
+            fps: None,
+        };
+        let result = handle_convert(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid format"));
+    }
+
+    #[test]
+    fn test_stitch_invalid_format() {
+        let args = StitchArgs {
+            inputs: vec!["frame.png".to_string()],
+            output: PathBuf::from("output.mp4"),
+            format: "invalid".to_string(),
+            fps: 24,
+            width: None,
+        };
+        let result = handle_stitch(&args, true);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("Invalid format"));
+    }
+}
