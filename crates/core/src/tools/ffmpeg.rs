@@ -817,13 +817,16 @@ impl FfmpegTool {
         )
     }
 
-    /// Convert video to animated GIF.
+    /// Convert video to a different format.
+    /// For GIF: uses palette generation for quality.
+    /// For other formats: uses stream copy when possible.
     #[allow(clippy::too_many_arguments)]
-    pub fn video_gif(
+    pub fn video_convert(
         &self,
         tool_path: &Path,
         input: &Path,
         output: &Path,
+        format: &str,
         start: Option<f64>,
         duration: Option<f64>,
         width: Option<u32>,
@@ -842,15 +845,20 @@ impl FfmpegTool {
             cmd.arg("-t").arg(format!("{:.3}", d));
         }
 
-        // Build filter for fps and scale
-        let fps_val = fps.unwrap_or(10);
-        let filter = if let Some(w) = width {
-            format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
+        if format == "gif" {
+            // GIF needs special palette generation for quality
+            let fps_val = fps.unwrap_or(10);
+            let filter = if let Some(w) = width {
+                format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
+            } else {
+                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
+            };
+            cmd.arg("-filter_complex").arg(&filter);
         } else {
-            format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
-        };
+            // For other formats, use stream copy when possible
+            cmd.arg("-c").arg("copy");
+        }
 
-        cmd.arg("-filter_complex").arg(&filter);
         cmd.arg(output);
 
         let output_result = cmd.output()?;
@@ -864,10 +872,12 @@ impl FfmpegTool {
         Ok(())
     }
 
-    /// Generate plan string for video to GIF conversion.
-    pub fn plan_video_gif(
+    /// Generate plan string for video format conversion.
+    #[allow(clippy::too_many_arguments)]
+    pub fn plan_video_convert(
         input: &Path,
         output: &Path,
+        format: &str,
         start: Option<f64>,
         duration: Option<f64>,
         width: Option<u32>,
@@ -888,15 +898,20 @@ impl FfmpegTool {
             parts.push(format!("{:.3}", d));
         }
 
-        let fps_val = fps.unwrap_or(10);
-        let filter = if let Some(w) = width {
-            format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
+        if format == "gif" {
+            let fps_val = fps.unwrap_or(10);
+            let filter = if let Some(w) = width {
+                format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
+            } else {
+                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
+            };
+            parts.push("-filter_complex".to_string());
+            parts.push(format!("\"{}\"", filter));
         } else {
-            format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
-        };
+            parts.push("-c".to_string());
+            parts.push("copy".to_string());
+        }
 
-        parts.push("-filter_complex".to_string());
-        parts.push(format!("\"{}\"", filter));
         parts.push(output.display().to_string());
         parts.join(" ")
     }
