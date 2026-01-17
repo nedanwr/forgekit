@@ -332,19 +332,21 @@ pub enum JobSpec {
         timestamp: f64,
     },
 
-    /// Convert video clip to animated GIF.
-    VideoGif {
+    /// Convert video to a different format/container.
+    VideoConvert {
         /// Input video file.
         input: PathBuf,
-        /// Output GIF file.
+        /// Output video file.
         output: PathBuf,
-        /// Start time in seconds (optional).
+        /// Target format (gif, webm, mov, avi, etc.).
+        format: String,
+        /// Start time in seconds (optional, for gif).
         start: Option<f64>,
-        /// Duration in seconds (optional, default 5).
+        /// Duration in seconds (optional, for gif).
         duration: Option<f64>,
-        /// Output width (height auto-calculated).
+        /// Output width (optional, for gif).
         width: Option<u32>,
-        /// Frame rate for GIF (default 10).
+        /// Frame rate (optional, for gif).
         fps: Option<u32>,
     },
 
@@ -496,27 +498,8 @@ impl JobSpec {
             JobSpec::VideoThumbnail { timestamp, .. } => {
                 format!("Extract thumbnail at {:.1}s", timestamp)
             }
-            JobSpec::VideoGif {
-                start,
-                duration,
-                width,
-                fps,
-                ..
-            } => {
-                let mut desc = "Convert to GIF".to_string();
-                if let Some(s) = start {
-                    desc.push_str(&format!(" from {:.1}s", s));
-                }
-                if let Some(d) = duration {
-                    desc.push_str(&format!(" ({:.1}s)", d));
-                }
-                if let Some(w) = width {
-                    desc.push_str(&format!(" {}px", w));
-                }
-                if let Some(f) = fps {
-                    desc.push_str(&format!(" {}fps", f));
-                }
-                desc
+            JobSpec::VideoConvert { format, .. } => {
+                format!("Convert video to {}", format.to_uppercase())
             }
             JobSpec::VideoSpeed { speed, .. } => {
                 format!("Change video speed to {:.1}x", speed)
