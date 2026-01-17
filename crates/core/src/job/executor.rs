@@ -199,14 +199,15 @@ pub fn execute_job_with_progress(
             output,
             timestamp,
         } => execute_video_thumbnail(input, output, *timestamp, plan_only),
-        JobSpec::VideoGif {
+        JobSpec::VideoConvert {
             input,
             output,
+            format,
             start,
             duration,
             width,
             fps,
-        } => execute_video_gif(input, output, *start, *duration, *width, *fps, plan_only),
+        } => execute_video_convert(input, output, format, *start, *duration, *width, *fps, plan_only),
         JobSpec::VideoSpeed {
             input,
             output,
@@ -1634,9 +1635,11 @@ fn execute_video_thumbnail(
     ))
 }
 
-fn execute_video_gif(
+#[allow(clippy::too_many_arguments)]
+fn execute_video_convert(
     input: &Path,
     output: &Path,
+    format: &str,
     start: Option<f64>,
     duration: Option<f64>,
     width: Option<u32>,
@@ -1644,7 +1647,7 @@ fn execute_video_gif(
     plan_only: bool,
 ) -> Result<String> {
     if plan_only {
-        return Ok(FfmpegTool::plan_video_gif(input, output, start, duration, width, fps));
+        return Ok(FfmpegTool::plan_video_convert(input, output, format, start, duration, width, fps));
     }
 
     if !input.exists() {
@@ -1656,10 +1659,11 @@ fn execute_video_gif(
 
     let tool_info = probe_ffmpeg()?;
     let tool = FfmpegTool;
-    tool.video_gif(&tool_info.path, input, output, start, duration, width, fps)?;
+    tool.video_convert(&tool_info.path, input, output, format, start, duration, width, fps)?;
 
     Ok(format!(
-        "Successfully created GIF: {}",
+        "Successfully converted video to {}: {}",
+        format.to_uppercase(),
         output.display()
     ))
 }
