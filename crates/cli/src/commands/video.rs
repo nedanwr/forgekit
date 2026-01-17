@@ -64,15 +64,17 @@ pub enum VideoCommand {
     /// Output format determined by extension (.jpg, .png).
     Thumbnail(ThumbnailArgs),
 
-    /// Convert video clip to animated GIF
+    /// Convert video to a different format
     ///
     /// Examples:
-    ///   forgekit video gif video.mp4 --output clip.gif
-    ///   forgekit video gif video.mp4 --start 10 --duration 5 --output clip.gif
-    ///   forgekit video gif video.mp4 --width 480 --fps 15 --output clip.gif
+    ///   forgekit video convert video.mp4 -t gif --output clip.gif
+    ///   forgekit video convert video.mp4 -t gif --start 10 --duration 5 --output clip.gif
+    ///   forgekit video convert video.mp4 -t webm --output video.webm
+    ///   forgekit video convert video.mkv -t mp4 --output video.mp4
     ///
-    /// Creates high-quality GIF with optimized palette.
-    Gif(GifArgs),
+    /// Supported formats: gif, webm, mp4, mov, avi, mkv
+    /// GIF options: --start, --duration, --width, --fps
+    Convert(ConvertArgs),
 
     /// Change video playback speed
     ///
@@ -200,30 +202,34 @@ pub struct ThumbnailArgs {
 }
 
 #[derive(Args, Clone)]
-pub struct GifArgs {
+pub struct ConvertArgs {
     /// Input video file
     #[arg(required = true, help = "Input video file")]
     pub input: PathBuf,
 
-    /// Output GIF file
-    #[arg(short, long, required = true, help = "Output GIF file")]
+    /// Output video file
+    #[arg(short, long, required = true, help = "Output file")]
     pub output: PathBuf,
 
-    /// Start time (seconds or MM:SS or HH:MM:SS)
-    #[arg(short, long, help = "Start time (e.g., 10, 0:30)")]
+    /// Target format (gif, webm, mp4, mov, avi, mkv)
+    #[arg(short = 't', long = "to", required = true, help = "Target format (gif, webm, mp4, mov, avi)")]
+    pub format: String,
+
+    /// Start time - for GIF only (seconds or MM:SS or HH:MM:SS)
+    #[arg(short, long, help = "Start time for GIF (e.g., 10, 0:30)")]
     pub start: Option<String>,
 
-    /// Duration in seconds (default: 5)
-    #[arg(short, long, default_value = "5", help = "Duration in seconds")]
-    pub duration: f64,
+    /// Duration in seconds - for GIF only
+    #[arg(short, long, help = "Duration for GIF in seconds")]
+    pub duration: Option<f64>,
 
-    /// Output width in pixels (height auto-calculated)
-    #[arg(short, long, help = "Output width (height auto-calculated)")]
+    /// Output width in pixels - for GIF only (height auto-calculated)
+    #[arg(short, long, help = "Width for GIF (height auto-calculated)")]
     pub width: Option<u32>,
 
-    /// Frame rate (default: 10)
-    #[arg(short, long, default_value = "10", help = "Frame rate (default: 10)")]
-    pub fps: u32,
+    /// Frame rate - for GIF only (default: 10)
+    #[arg(short, long, help = "Frame rate for GIF (default: 10)")]
+    pub fps: Option<u32>,
 }
 
 #[derive(Args, Clone)]
@@ -274,7 +280,7 @@ pub fn handle_video_command(cmd: &VideoCommand, plan_only: bool, json_output: bo
         VideoCommand::Join(args) => handle_join(args, plan_only),
         VideoCommand::Info(args) => handle_info(args, json_output),
         VideoCommand::Thumbnail(args) => handle_thumbnail(args, plan_only),
-        VideoCommand::Gif(args) => handle_gif(args, plan_only),
+        VideoCommand::Convert(args) => handle_convert(args, plan_only),
         VideoCommand::Speed(args) => handle_speed(args, plan_only),
         VideoCommand::Rotate(args) => handle_rotate(args, plan_only),
         VideoCommand::Mute(args) => handle_mute(args, plan_only),
@@ -660,16 +666,31 @@ fn handle_thumbnail(args: &ThumbnailArgs, plan_only: bool) -> Result<()> {
     Ok(())
 }
 
-fn handle_gif(args: &GifArgs, plan_only: bool) -> Result<()> {
+fn handle_convert(args: &ConvertArgs, plan_only: bool) -> Result<()> {
     let start = args.start.as_ref().map(|s| parse_time(s)).transpose()?;
 
-    let spec = JobSpec::VideoGif {
+    // Validate format
+    let format = args.format.to_lowercase();
+    let valid_formats = ["gif", "webm", "mp4", "mov", "avi", "mkv"];
+    if !valid_formats.contains(&format.as_str()) {
+        return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: format!(
+                "Invalid format '{}'. Supported: {}",
+                args.format,
+                valid_formats.join(", ")
+            ),
+        });
+    }
+
+    let spec = JobSpec::VideoConvert {
         input: args.input.clone(),
         output: args.output.clone(),
+        format,
         start,
-        duration: Some(args.duration),
+        duration: args.duration,
         width: args.width,
-        fps: Some(args.fps),
+        fps: args.fps,
     };
 
     let result = execute_job(&spec, plan_only)?;
