@@ -219,6 +219,13 @@ pub fn execute_job_with_progress(
             degrees,
         } => execute_video_rotate(input, output, *degrees, plan_only),
         JobSpec::VideoMute { input, output } => execute_video_mute(input, output, plan_only),
+        JobSpec::VideoStitch {
+            inputs,
+            output,
+            format,
+            fps,
+            width,
+        } => execute_video_stitch(inputs, output, format, *fps, *width, plan_only),
     }
 }
 
@@ -1760,6 +1767,46 @@ fn execute_video_mute(
 
     Ok(format!(
         "Successfully removed audio from video: {}",
+        output.display()
+    ))
+}
+
+fn execute_video_stitch(
+    inputs: &[PathBuf],
+    output: &Path,
+    format: &str,
+    fps: u32,
+    width: Option<u32>,
+    plan_only: bool,
+) -> Result<String> {
+    if plan_only {
+        return Ok(FfmpegTool::plan_video_stitch(inputs, output, format, fps, width));
+    }
+
+    if inputs.is_empty() {
+        return Err(ForgeKitError::InvalidInput {
+            path: PathBuf::new(),
+            reason: "No input images provided".to_string(),
+        });
+    }
+
+    for input in inputs {
+        if !input.exists() {
+            return Err(ForgeKitError::InvalidInput {
+                path: input.clone(),
+                reason: "Input file does not exist".to_string(),
+            });
+        }
+    }
+
+    let tool_info = probe_ffmpeg()?;
+    let tool = FfmpegTool;
+    tool.video_stitch(&tool_info.path, inputs, output, format, fps, width)?;
+
+    Ok(format!(
+        "Successfully stitched {} images into {}: {}",
+        inputs.len(),
+        format.to_uppercase(),
         output.display()
     ))
 }
