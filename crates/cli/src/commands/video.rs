@@ -944,7 +944,7 @@ mod tests {
     // Natural sorting tests
     #[test]
     fn test_natural_sort_key_numbers() {
-        let mut files = vec![
+        let mut files = [
             PathBuf::from("frame_10.png"),
             PathBuf::from("frame_2.png"),
             PathBuf::from("frame_1.png"),
@@ -957,7 +957,7 @@ mod tests {
 
     #[test]
     fn test_natural_sort_key_mixed() {
-        let mut files = vec![
+        let mut files = [
             PathBuf::from("part_100.mp4"),
             PathBuf::from("part_20.mp4"),
             PathBuf::from("part_3.mp4"),
