@@ -3,11 +3,12 @@ members = ["crates/core", "crates/cli"]
 resolver = "2"
 
 [workspace.package]
-version = "0.0.8"
+version = "0.0.9"
 edition = "2021"
 authors = ["ForgeKit Contributors"]
 license = "MIT"
-repository = "https://github.com/nedanwar/forgekit"
+repository = "https://github.com/nedanwr/forgekit"
+homepage = "https://github.com/nedanwr/forgekit"
 
 [workspace.dependencies]
 anyhow = "1.0"
