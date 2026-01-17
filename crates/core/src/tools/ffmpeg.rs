@@ -1156,9 +1156,9 @@ impl FfmpegTool {
 
         if format == "gif" {
             let filter = if let Some(w) = width {
-                format!("fps={},scale={}:-1:flags=lanczos,palettegen/paletteuse", fps, w)
+                format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps, w)
             } else {
-                format!("fps={},palettegen/paletteuse", fps)
+                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps)
             };
             format!(
                 "ffmpeg -y -f concat -i <{}> -filter_complex \"{}\" {}",
