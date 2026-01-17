@@ -3,11 +3,11 @@
 # When users install forgekit.rpm, these dependencies will be automatically installed
 
 Name:           forgekit
-Version:        0.0.3
+Version:        0.0.9
 Release:        1%{?dist}
 Summary:        Local-first media and PDF toolkit
 License:        MIT
-URL:            https://github.com/nedanwar/forgekit
+URL:            https://github.com/nedanwr/forgekit
 Source0:        %{name}-%{version}.tar.gz
 
 BuildRequires:  rust
@@ -49,6 +49,12 @@ fi
 %{_bindir}/forgekit
 
 %changelog
+* Fri Jan 2026 ForgeKit Contributors <forgekit@example.com> - 0.0.9-1
+- Added GitHub Actions release workflow
+- Added Dockerfile for containerized distribution
+- Added Makefile for common tasks
+- Updated Cargo.toml with crates.io publishing fields
+
 * Wed Dec 2025 ForgeKit Contributors <forgekit@example.com> - 0.0.3-1
 - Initial RPM package
 
