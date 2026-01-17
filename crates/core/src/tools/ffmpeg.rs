@@ -1064,6 +1064,117 @@ impl FfmpegTool {
             output.display()
         )
     }
+
+    /// Stitch image sequence into video or GIF.
+    pub fn video_stitch(
+        &self,
+        tool_path: &Path,
+        inputs: &[PathBuf],
+        output: &Path,
+        format: &str,
+        fps: u32,
+        width: Option<u32>,
+    ) -> Result<()> {
+        use std::io::Write;
+
+        // Create a concat file listing all images
+        let temp_dir = std::env::temp_dir();
+        let concat_file = temp_dir.join(format!("forgekit_stitch_{}.txt", uuid::Uuid::new_v4()));
+
+        {
+            let mut file = std::fs::File::create(&concat_file)?;
+            for input in inputs {
+                // Each image shown for 1/fps duration
+                writeln!(file, "file '{}'", input.canonicalize()?.display())?;
+                writeln!(file, "duration {:.6}", 1.0 / fps as f64)?;
+            }
+            // Repeat last frame to avoid ffmpeg duration issue
+            if let Some(last) = inputs.last() {
+                writeln!(file, "file '{}'", last.canonicalize()?.display())?;
+            }
+        }
+
+        let mut cmd = Command::new(tool_path);
+        cmd.arg("-y")
+            .arg("-f").arg("concat")
+            .arg("-safe").arg("0")
+            .arg("-i").arg(&concat_file);
+
+        if format == "gif" {
+            // GIF with palette generation
+            let filter = if let Some(w) = width {
+                format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps, w)
+            } else {
+                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps)
+            };
+            cmd.arg("-filter_complex").arg(&filter);
+        } else {
+            // Video output
+            cmd.arg("-c:v").arg("libx264")
+                .arg("-pix_fmt").arg("yuv420p")
+                .arg("-r").arg(fps.to_string());
+        }
+
+        cmd.arg(output);
+
+        let output_result = cmd.output()?;
+
+        // Clean up concat file
+        let _ = std::fs::remove_file(&concat_file);
+
+        if !output_result.status.success() {
+            let stderr = String::from_utf8_lossy(&output_result.stderr);
+            return Err(ForgeKitError::ProcessingFailed {
+                tool: "ffmpeg".to_string(),
+                stderr: stderr.to_string(),
+            });
+        }
+        Ok(())
+    }
+
+    /// Generate plan string for video stitch.
+    pub fn plan_video_stitch(
+        inputs: &[PathBuf],
+        output: &Path,
+        format: &str,
+        fps: u32,
+        width: Option<u32>,
+    ) -> String {
+        let files_preview = if inputs.len() <= 3 {
+            inputs
+                .iter()
+                .map(|p| p.file_name().unwrap_or_default().to_string_lossy().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        } else {
+            format!(
+                "{}, ... ({} files)",
+                inputs[0].file_name().unwrap_or_default().to_string_lossy(),
+                inputs.len()
+            )
+        };
+
+        if format == "gif" {
+            let filter = if let Some(w) = width {
+                format!("fps={},scale={}:-1:flags=lanczos,palettegen/paletteuse", fps, w)
+            } else {
+                format!("fps={},palettegen/paletteuse", fps)
+            };
+            format!(
+                "ffmpeg -y -f concat -i <{}> -filter_complex \"{}\" {}",
+                files_preview,
+                filter,
+                output.display()
+            )
+        } else {
+            format!(
+                "ffmpeg -y -f concat -i <{}> -c:v libx264 -pix_fmt yuv420p -r {} {}",
+                files_preview,
+                fps,
+                output.display()
+            )
+        }
+    }
 }
 
 /// Build atempo filter chain for speed changes.
