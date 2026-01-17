@@ -279,7 +279,6 @@ pub enum JobSpec {
     },
 
     // ========== Video Operations ==========
-
     /// Transcode video to H.264 format.
     ///
     /// Uses ffmpeg with software x264 encoder. CRF controls quality (0-51, lower is better).
@@ -498,7 +497,10 @@ impl JobSpec {
                         }
                     })
                     .unwrap_or_default();
-                format!("Transcode video to H.264 (CRF {}, {}){}", crf, preset, scale_str)
+                format!(
+                    "Transcode video to H.264 (CRF {}, {}){}",
+                    crf, preset, scale_str
+                )
             }
             JobSpec::VideoTrim { start, end, .. } => match (start, end) {
                 (Some(s), Some(e)) => format!("Trim video from {:.1}s to {:.1}s", s, e),

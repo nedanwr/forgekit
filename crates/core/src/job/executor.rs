@@ -207,7 +207,9 @@ pub fn execute_job_with_progress(
             duration,
             width,
             fps,
-        } => execute_video_convert(input, output, format, *start, *duration, *width, *fps, plan_only),
+        } => execute_video_convert(
+            input, output, format, *start, *duration, *width, *fps, plan_only,
+        ),
         JobSpec::VideoSpeed {
             input,
             output,
@@ -1523,7 +1525,15 @@ fn execute_video_transcode(
 
     let tool_info = probe_ffmpeg()?;
     let tool = FfmpegTool;
-    tool.transcode(&tool_info.path, input, output, crf, preset, scale, copy_audio)?;
+    tool.transcode(
+        &tool_info.path,
+        input,
+        output,
+        crf,
+        preset,
+        scale,
+        copy_audio,
+    )?;
 
     let scale_str = scale
         .map(|(w, h)| {
@@ -1572,17 +1582,10 @@ fn execute_video_trim(
         (None, None) => String::new(),
     };
 
-    Ok(format!(
-        "Successfully trimmed video{}",
-        time_str
-    ))
+    Ok(format!("Successfully trimmed video{}", time_str))
 }
 
-fn execute_video_join(
-    inputs: &[PathBuf],
-    output: &Path,
-    plan_only: bool,
-) -> Result<String> {
+fn execute_video_join(inputs: &[PathBuf], output: &Path, plan_only: bool) -> Result<String> {
     if plan_only {
         return Ok(FfmpegTool::plan_video_join(inputs, output));
     }
@@ -1654,7 +1657,9 @@ fn execute_video_convert(
     plan_only: bool,
 ) -> Result<String> {
     if plan_only {
-        return Ok(FfmpegTool::plan_video_convert(input, output, format, start, duration, width, fps));
+        return Ok(FfmpegTool::plan_video_convert(
+            input, output, format, start, duration, width, fps,
+        ));
     }
 
     if !input.exists() {
@@ -1666,7 +1671,16 @@ fn execute_video_convert(
 
     let tool_info = probe_ffmpeg()?;
     let tool = FfmpegTool;
-    tool.video_convert(&tool_info.path, input, output, format, start, duration, width, fps)?;
+    tool.video_convert(
+        &tool_info.path,
+        input,
+        output,
+        format,
+        start,
+        duration,
+        width,
+        fps,
+    )?;
 
     Ok(format!(
         "Successfully converted video to {}: {}",
@@ -1675,12 +1689,7 @@ fn execute_video_convert(
     ))
 }
 
-fn execute_video_speed(
-    input: &Path,
-    output: &Path,
-    speed: f64,
-    plan_only: bool,
-) -> Result<String> {
+fn execute_video_speed(input: &Path, output: &Path, speed: f64, plan_only: bool) -> Result<String> {
     if plan_only {
         return Ok(FfmpegTool::plan_video_speed(input, output, speed));
     }
@@ -1745,11 +1754,7 @@ fn execute_video_rotate(
     ))
 }
 
-fn execute_video_mute(
-    input: &Path,
-    output: &Path,
-    plan_only: bool,
-) -> Result<String> {
+fn execute_video_mute(input: &Path, output: &Path, plan_only: bool) -> Result<String> {
     if plan_only {
         return Ok(FfmpegTool::plan_video_mute(input, output));
     }
@@ -1780,7 +1785,9 @@ fn execute_video_stitch(
     plan_only: bool,
 ) -> Result<String> {
     if plan_only {
-        return Ok(FfmpegTool::plan_video_stitch(inputs, output, format, fps, width));
+        return Ok(FfmpegTool::plan_video_stitch(
+            inputs, output, format, fps, width,
+        ));
     }
 
     if inputs.is_empty() {
@@ -2536,16 +2543,9 @@ mod video_operation_tests {
         let input = PathBuf::from("video.mp4");
         let output = PathBuf::from("output.mp4");
 
-        let result = execute_video_transcode(
-            &input,
-            &output,
-            23,
-            "fast",
-            Some((1920, 1080)),
-            true,
-            true,
-        )
-        .unwrap();
+        let result =
+            execute_video_transcode(&input, &output, 23, "fast", Some((1920, 1080)), true, true)
+                .unwrap();
 
         assert!(result.contains("-vf scale=1920:1080"));
     }
@@ -2556,16 +2556,9 @@ mod video_operation_tests {
         let output = PathBuf::from("output.mp4");
 
         // -1 height = preserve aspect ratio
-        let result = execute_video_transcode(
-            &input,
-            &output,
-            20,
-            "slow",
-            Some((1280, -1)),
-            false,
-            true,
-        )
-        .unwrap();
+        let result =
+            execute_video_transcode(&input, &output, 20, "slow", Some((1280, -1)), false, true)
+                .unwrap();
 
         assert!(result.contains("-vf scale=1280:-2")); // -2 ensures divisible by 2
         assert!(result.contains("-c:a aac"));

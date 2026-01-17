@@ -122,7 +122,12 @@ pub struct TranscodeArgs {
     pub input: PathBuf,
 
     /// Output video file
-    #[arg(short, long, required = true, help = "Output video file (must be .mp4)")]
+    #[arg(
+        short,
+        long,
+        required = true,
+        help = "Output video file (must be .mp4)"
+    )]
     pub output: PathBuf,
 
     /// CRF quality (0-51, lower = better quality). Default: 23
@@ -152,11 +157,7 @@ pub struct TranscodeArgs {
     pub scale: Option<i32>,
 
     /// Re-encode audio to AAC 128kbps (default: copy audio stream)
-    #[arg(
-        long,
-        default_value = "false",
-        help = "Re-encode audio to AAC 128kbps"
-    )]
+    #[arg(long, default_value = "false", help = "Re-encode audio to AAC 128kbps")]
     pub reencode_audio: bool,
 }
 
@@ -204,11 +205,21 @@ pub struct ThumbnailArgs {
     pub input: PathBuf,
 
     /// Output image file (.jpg or .png)
-    #[arg(short, long, required = true, help = "Output image file (.jpg or .png)")]
+    #[arg(
+        short,
+        long,
+        required = true,
+        help = "Output image file (.jpg or .png)"
+    )]
     pub output: PathBuf,
 
     /// Timestamp to extract frame (seconds or MM:SS or HH:MM:SS)
-    #[arg(short, long, required = true, help = "Time to extract frame (e.g., 5, 1:30)")]
+    #[arg(
+        short,
+        long,
+        required = true,
+        help = "Time to extract frame (e.g., 5, 1:30)"
+    )]
     pub time: String,
 }
 
@@ -223,7 +234,12 @@ pub struct ConvertArgs {
     pub output: PathBuf,
 
     /// Target format (gif, webm, mp4, mov, avi, mkv)
-    #[arg(short = 't', long = "to", required = true, help = "Target format (gif, webm, mp4, mov, avi)")]
+    #[arg(
+        short = 't',
+        long = "to",
+        required = true,
+        help = "Target format (gif, webm, mp4, mov, avi)"
+    )]
     pub format: String,
 
     /// Start time - for GIF only (seconds or MM:SS or HH:MM:SS)
@@ -254,7 +270,12 @@ pub struct SpeedArgs {
     pub output: PathBuf,
 
     /// Speed multiplier (e.g., 2 for 2x speed, 0.5 for half speed)
-    #[arg(short = 'x', long, required = true, help = "Speed multiplier (e.g., 2, 0.5)")]
+    #[arg(
+        short = 'x',
+        long,
+        required = true,
+        help = "Speed multiplier (e.g., 2, 0.5)"
+    )]
     pub speed: f64,
 }
 
@@ -269,7 +290,12 @@ pub struct RotateArgs {
     pub output: PathBuf,
 
     /// Rotation angle: 90, 180, or 270 degrees clockwise
-    #[arg(short, long, required = true, help = "Rotation: 90, 180, or 270 degrees")]
+    #[arg(
+        short,
+        long,
+        required = true,
+        help = "Rotation: 90, 180, or 270 degrees"
+    )]
     pub degrees: u32,
 }
 
@@ -295,7 +321,12 @@ pub struct StitchArgs {
     pub output: PathBuf,
 
     /// Target format (mp4, gif, webm, mov)
-    #[arg(short = 't', long = "to", required = true, help = "Target format (mp4, gif, webm)")]
+    #[arg(
+        short = 't',
+        long = "to",
+        required = true,
+        help = "Target format (mp4, gif, webm)"
+    )]
     pub format: String,
 
     /// Frame rate
@@ -590,15 +621,25 @@ fn handle_info(args: &InfoArgs, json_output: bool) -> Result<()> {
             // Parse stream info (first line): width,height,codec_name,r_frame_rate
             let (width, height, codec, fps) = if let Some(line) = lines.first() {
                 let parts: Vec<&str> = line.split(',').collect();
-                let w = parts.first().and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-                let h = parts.get(1).and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+                let w = parts
+                    .first()
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .unwrap_or(0);
+                let h = parts
+                    .get(1)
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .unwrap_or(0);
                 let c = parts.get(2).unwrap_or(&"?").to_string();
                 let fps_str = parts.get(3).unwrap_or(&"0/1");
                 // Parse frame rate (e.g., "30/1" or "30000/1001")
                 let fps = if let Some((num, den)) = fps_str.split_once('/') {
                     let n: f64 = num.parse().unwrap_or(0.0);
                     let d: f64 = den.parse().unwrap_or(1.0);
-                    if d > 0.0 { n / d } else { 0.0 }
+                    if d > 0.0 {
+                        n / d
+                    } else {
+                        0.0
+                    }
                 } else {
                     fps_str.parse().unwrap_or(0.0)
                 };
@@ -756,7 +797,10 @@ fn handle_rotate(args: &RotateArgs, plan_only: bool) -> Result<()> {
     if args.degrees != 90 && args.degrees != 180 && args.degrees != 270 {
         return Err(forgekit_core::utils::error::ForgeKitError::InvalidInput {
             path: PathBuf::new(),
-            reason: format!("Invalid rotation angle {}. Use 90, 180, or 270.", args.degrees),
+            reason: format!(
+                "Invalid rotation angle {}. Use 90, 180, or 270.",
+                args.degrees
+            ),
         });
     }
 

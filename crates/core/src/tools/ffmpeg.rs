@@ -724,12 +724,7 @@ impl FfmpegTool {
 
     /// Join multiple video files using concat demuxer.
     /// All inputs must have the same codec/resolution/frame rate.
-    pub fn video_join(
-        &self,
-        tool_path: &Path,
-        inputs: &[PathBuf],
-        output: &Path,
-    ) -> Result<()> {
+    pub fn video_join(&self, tool_path: &Path, inputs: &[PathBuf], output: &Path) -> Result<()> {
         use std::io::Write;
 
         // Create concat file list
@@ -745,10 +740,14 @@ impl FfmpegTool {
 
         let mut cmd = Command::new(tool_path);
         cmd.arg("-y")
-            .arg("-f").arg("concat")
-            .arg("-safe").arg("0")
-            .arg("-i").arg(&concat_file)
-            .arg("-c").arg("copy")
+            .arg("-f")
+            .arg("concat")
+            .arg("-safe")
+            .arg("0")
+            .arg("-i")
+            .arg(&concat_file)
+            .arg("-c")
+            .arg("copy")
             .arg(output);
 
         let output_result = cmd.output()?;
@@ -790,10 +789,14 @@ impl FfmpegTool {
     ) -> Result<()> {
         let mut cmd = Command::new(tool_path);
         cmd.arg("-y")
-            .arg("-ss").arg(format!("{:.3}", timestamp))
-            .arg("-i").arg(input)
-            .arg("-frames:v").arg("1")
-            .arg("-q:v").arg("2")
+            .arg("-ss")
+            .arg(format!("{:.3}", timestamp))
+            .arg("-i")
+            .arg(input)
+            .arg("-frames:v")
+            .arg("1")
+            .arg("-q:v")
+            .arg("2")
             .arg(output);
 
         let output_result = cmd.output()?;
@@ -851,7 +854,10 @@ impl FfmpegTool {
             let filter = if let Some(w) = width {
                 format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
             } else {
-                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
+                format!(
+                    "fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                    fps_val
+                )
             };
             cmd.arg("-filter_complex").arg(&filter);
         } else {
@@ -903,7 +909,10 @@ impl FfmpegTool {
             let filter = if let Some(w) = width {
                 format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val, w)
             } else {
-                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps_val)
+                format!(
+                    "fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                    fps_val
+                )
             };
             parts.push("-filter_complex".to_string());
             parts.push(format!("\"{}\"", filter));
@@ -925,8 +934,7 @@ impl FfmpegTool {
         speed: f64,
     ) -> Result<()> {
         let mut cmd = Command::new(tool_path);
-        cmd.arg("-y")
-            .arg("-i").arg(input);
+        cmd.arg("-y").arg("-i").arg(input);
 
         // Video speed: setpts=PTS/speed (e.g., 2x = PTS/2, 0.5x = PTS/0.5)
         // Audio speed: atempo filter (only supports 0.5 to 2.0, chain for more)
@@ -988,20 +996,25 @@ impl FfmpegTool {
         degrees: u32,
     ) -> Result<()> {
         let transpose = match degrees {
-            90 => "transpose=1",      // 90 clockwise
+            90 => "transpose=1",              // 90 clockwise
             180 => "transpose=1,transpose=1", // 180
-            270 => "transpose=2",     // 90 counter-clockwise (270 clockwise)
-            _ => return Err(ForgeKitError::InvalidInput {
-                path: input.to_path_buf(),
-                reason: format!("Invalid rotation angle {}. Use 90, 180, or 270.", degrees),
-            }),
+            270 => "transpose=2",             // 90 counter-clockwise (270 clockwise)
+            _ => {
+                return Err(ForgeKitError::InvalidInput {
+                    path: input.to_path_buf(),
+                    reason: format!("Invalid rotation angle {}. Use 90, 180, or 270.", degrees),
+                })
+            }
         };
 
         let mut cmd = Command::new(tool_path);
         cmd.arg("-y")
-            .arg("-i").arg(input)
-            .arg("-vf").arg(transpose)
-            .arg("-c:a").arg("copy")
+            .arg("-i")
+            .arg(input)
+            .arg("-vf")
+            .arg(transpose)
+            .arg("-c:a")
+            .arg("copy")
             .arg(output);
 
         let output_result = cmd.output()?;
@@ -1032,16 +1045,13 @@ impl FfmpegTool {
     }
 
     /// Remove audio track from video.
-    pub fn video_mute(
-        &self,
-        tool_path: &Path,
-        input: &Path,
-        output: &Path,
-    ) -> Result<()> {
+    pub fn video_mute(&self, tool_path: &Path, input: &Path, output: &Path) -> Result<()> {
         let mut cmd = Command::new(tool_path);
         cmd.arg("-y")
-            .arg("-i").arg(input)
-            .arg("-c:v").arg("copy")
+            .arg("-i")
+            .arg(input)
+            .arg("-c:v")
+            .arg("copy")
             .arg("-an")
             .arg(output);
 
@@ -1096,23 +1106,32 @@ impl FfmpegTool {
 
         let mut cmd = Command::new(tool_path);
         cmd.arg("-y")
-            .arg("-f").arg("concat")
-            .arg("-safe").arg("0")
-            .arg("-i").arg(&concat_file);
+            .arg("-f")
+            .arg("concat")
+            .arg("-safe")
+            .arg("0")
+            .arg("-i")
+            .arg(&concat_file);
 
         if format == "gif" {
             // GIF with palette generation
             let filter = if let Some(w) = width {
                 format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps, w)
             } else {
-                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps)
+                format!(
+                    "fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                    fps
+                )
             };
             cmd.arg("-filter_complex").arg(&filter);
         } else {
             // Video output
-            cmd.arg("-c:v").arg("libx264")
-                .arg("-pix_fmt").arg("yuv420p")
-                .arg("-r").arg(fps.to_string());
+            cmd.arg("-c:v")
+                .arg("libx264")
+                .arg("-pix_fmt")
+                .arg("yuv420p")
+                .arg("-r")
+                .arg(fps.to_string());
         }
 
         cmd.arg(output);
@@ -1143,7 +1162,12 @@ impl FfmpegTool {
         let files_preview = if inputs.len() <= 3 {
             inputs
                 .iter()
-                .map(|p| p.file_name().unwrap_or_default().to_string_lossy().to_string())
+                .map(|p| {
+                    p.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string()
+                })
                 .collect::<Vec<_>>()
                 .join(", ")
         } else {
@@ -1158,7 +1182,10 @@ impl FfmpegTool {
             let filter = if let Some(w) = width {
                 format!("fps={},scale={}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps, w)
             } else {
-                format!("fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse", fps)
+                format!(
+                    "fps={},split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse",
+                    fps
+                )
             };
             format!(
                 "ffmpeg -y -f concat -i <{}> -filter_complex \"{}\" {}",
