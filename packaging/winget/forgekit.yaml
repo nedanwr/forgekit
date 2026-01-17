@@ -1,32 +1,33 @@
 # winget manifest for ForgeKit
-# This file defines dependencies for Windows installation
-# When users install via `winget install forgekit`, these dependencies will be automatically installed
+# Note: winget does not auto-install dependencies. Users must install them manually.
+# See postinstall.ps1 for dependency installation commands.
 
 Id: forgekit.forgekit
-Version: 0.0.3
+Version: 0.0.9
 Name: ForgeKit
 Publisher: ForgeKit Contributors
 Description: Local-first media and PDF toolkit. Fast, privacy-focused CLI for PDF, image, audio, and video operations.
 License: MIT
 LicenseUrl: https://opensource.org/licenses/MIT
-Homepage: https://github.com/nedanwar/forgekit
+Homepage: https://github.com/nedanwr/forgekit
 Tags:
   - pdf
   - media
   - cli
   - toolkit
-InstallerType: exe
+InstallerType: zip
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/nedanwar/forgekit/releases/download/v0.0.3/forgekit-0.0.3-x64.exe
+    InstallerUrl: https://github.com/nedanwr/forgekit/releases/download/v0.0.9/forgekit-v0.0.9-x86_64-pc-windows-msvc.zip
     InstallerSha256: PLACEHOLDER_SHA256
 ManifestType: version
-Dependencies:
-  - PackageIdentifier: qpdf.qpdf
-  - PackageIdentifier: ArtifexSoftware.GhostScript
-  - PackageIdentifier: tesseract-ocr
-  - PackageIdentifier: Gyan.FFmpeg
-  - PackageIdentifier: libvips.libvips
-  - PackageIdentifier: exiftool.exiftool
-  - PackageIdentifier: Python.Python.3
+
+# Dependencies (informational - must be installed manually):
+# winget install qpdf.qpdf
+# winget install ArtifexSoftware.GhostScript
+# winget install UB-Mannheim.TesseractOCR
+# winget install Gyan.FFmpeg
+# winget install Python.Python.3
+# scoop install libvips exiftool  (not available in winget)
+# pip install ocrmypdf
 
