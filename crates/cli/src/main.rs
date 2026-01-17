@@ -69,7 +69,7 @@ enum Commands {
     #[command(subcommand)]
     Audio(AudioCommand),
 
-    /// Video operations (transcode, trim, join, thumbnail, gif, etc.)
+    /// Video operations (convert, transcode, trim, thumbnail, etc.)
     #[command(subcommand)]
     Video(VideoCommand),
 
